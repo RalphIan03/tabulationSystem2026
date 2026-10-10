@@ -95,6 +95,6 @@ final class ActivityLogController extends Controller
     {
         $value = preg_replace('/[\r\n]+/u', ' ', $value ?? '') ?? '';
 
-        return preg_match('/^[=+\-@]/', $value) === 1 ? "'{$value}" : $value;
+        return preg_match('/^\s*[=+\-@]/u', $value) === 1 ? "'{$value}" : $value;
     }
 }

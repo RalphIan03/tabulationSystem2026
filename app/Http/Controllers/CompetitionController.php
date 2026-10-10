@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\CompetitionScoringMethod;
 use App\Http\Requests\StoreCompetitionRequest;
+use App\Http\Requests\UpdateCompetitionJudgeCountRequest;
 use App\Http\Requests\UpdateCompetitionScoringMethodRequest;
 use App\Models\Category;
 use App\Models\Competition;
 use App\Models\Event;
 use App\Services\CompetitionManager;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 final class CompetitionController extends Controller
@@ -24,8 +27,14 @@ final class CompetitionController extends Controller
         Event $event,
         Category $category,
     ): RedirectResponse {
+        $scoringMethod = $request->validated('scoring_method', CompetitionScoringMethod::Criteria->value);
+
         $category->competitions()->create([
             'name' => $request->validated('competition_name'),
+            'scoring_method' => $scoringMethod,
+            'judge_count' => $scoringMethod === CompetitionScoringMethod::Criteria->value
+                ? $request->validated('judge_count', 1)
+                : 1,
         ]);
 
         return to_route('events.show', $event)
@@ -33,6 +42,7 @@ final class CompetitionController extends Controller
     }
 
     public function show(
+        Request $request,
         Event $event,
         Category $category,
         Competition $competition,
@@ -46,7 +56,21 @@ final class CompetitionController extends Controller
             'event' => $event,
             'category' => $category,
             'competition' => $competition,
+            'canEditConfiguration' => $competition->canBeConfiguredBy($request->user()),
+            'judgeCountLocked' => $competition->results()->whereHas('criterionScores')->exists(),
         ]);
+    }
+
+    public function updateJudgeCount(
+        UpdateCompetitionJudgeCountRequest $request,
+        Event $event,
+        Category $category,
+        Competition $competition,
+    ): RedirectResponse {
+        $competition->update(['judge_count' => $request->validated('judge_count')]);
+
+        return to_route('events.categories.competitions.show', [$event, $category, $competition])
+            ->with('status', 'Number of judges updated successfully.');
     }
 
     public function updateScoringMethod(

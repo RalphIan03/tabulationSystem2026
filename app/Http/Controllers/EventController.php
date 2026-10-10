@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Enums\ScoringSystem;
 use App\Enums\TieRankingMethod;
 use App\Http\Requests\StoreEventRequest;
+use App\Http\Requests\UpdateEventDetailsRequest;
 use App\Http\Requests\UpdateEventTieRankingRequest;
 use App\Models\Event;
 use Illuminate\Http\RedirectResponse;
@@ -49,7 +50,7 @@ final class EventController extends Controller
             ->with('status', 'Event created successfully.');
     }
 
-    public function show(Event $event): View
+    public function show(Request $request, Event $event): View
     {
         $event->load([
             'participants' => fn ($query) => $query->orderBy('name'),
@@ -62,10 +63,39 @@ final class EventController extends Controller
                 ->orderBy('name'),
         ]);
 
+        $hasFinalizedCompetitions = $event->categories->contains(
+            static fn ($category): bool => $category->competitions->contains(
+                static fn ($competition): bool => $competition->scoresAreFinalized(),
+            ),
+        );
+        $lockedParticipantIds = [];
+
+        if ($hasFinalizedCompetitions && ! $request->user()->isAdmin()) {
+            $lockedParticipantIds = $event->participants()
+                ->whereHas('competitionResults.competition', static fn ($query) => $query
+                    ->whereNotNull('scores_finalized_at'))
+                ->pluck('participants.id')
+                ->all();
+        }
+
         return view('events.show', [
             'event' => $event,
             'tieRankingMethods' => TieRankingMethod::cases(),
+            'canEditTieRanking' => ! $hasFinalizedCompetitions || $request->user()->isAdmin(),
+            'lockedParticipantIds' => $lockedParticipantIds,
         ]);
+    }
+
+    public function updateDetails(UpdateEventDetailsRequest $request, Event $event): RedirectResponse
+    {
+        $event->update([
+            'name' => $request->validated('event_name'),
+            'start_date' => $request->validated('start_date'),
+            'end_date' => $request->validated('end_date'),
+        ]);
+
+        return to_route('events.show', $event)
+            ->with('status', 'Event details updated successfully.');
     }
 
     public function updateTieRanking(UpdateEventTieRankingRequest $request, Event $event): RedirectResponse

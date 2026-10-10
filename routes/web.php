@@ -7,16 +7,25 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CompetitionController;
 use App\Http\Controllers\CompetitionScoreController;
+use App\Http\Controllers\CompetitionScoreExportController;
 use App\Http\Controllers\CriterionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\EventLeaderboardController;
 use App\Http\Controllers\ParticipantController;
+use App\Http\Controllers\PublicLeaderboardController;
 use App\Http\Controllers\RankScoreController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/login');
+
+Route::get('/leaderboards', [PublicLeaderboardController::class, 'index'])
+    ->name('leaderboards.index');
+Route::get('/leaderboards/{event}', [PublicLeaderboardController::class, 'show'])
+    ->name('leaderboards.show');
+Route::get('/leaderboards/{event}/data', [PublicLeaderboardController::class, 'data'])
+    ->name('leaderboards.data');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
@@ -31,6 +40,8 @@ Route::middleware(['auth', 'active'])->group(function (): void {
         Route::patch('/users/{user}/status', [UserController::class, 'toggleStatus'])
             ->name('users.toggle-status');
         Route::post('/events', [EventController::class, 'store'])->name('events.store');
+        Route::patch('/events/{event}/details', [EventController::class, 'updateDetails'])
+            ->name('events.details.update');
         Route::delete('/events/{event}', [EventController::class, 'destroy'])
             ->name('events.destroy');
         Route::patch('/events/{event}/leaderboard-freeze', [EventController::class, 'toggleLeaderboardFreeze'])
@@ -74,10 +85,18 @@ Route::middleware(['auth', 'active'])->group(function (): void {
             '/events/{event}/categories/{category}/competitions/{competition}/scoring-method',
             [CompetitionController::class, 'updateScoringMethod'],
         )->name('events.categories.competitions.scoring-method.update');
+        Route::patch(
+            '/events/{event}/categories/{category}/competitions/{competition}/judge-count',
+            [CompetitionController::class, 'updateJudgeCount'],
+        )->name('events.categories.competitions.judge-count.update');
         Route::get(
             '/events/{event}/categories/{category}/competitions/{competition}/scores',
             [CompetitionScoreController::class, 'edit'],
         )->name('events.categories.competitions.scores.edit');
+        Route::get(
+            '/events/{event}/categories/{category}/competitions/{competition}/scores/export/{format}',
+            [CompetitionScoreExportController::class, 'download'],
+        )->where('format', 'xlsx|pdf')->name('events.categories.competitions.scores.export');
         Route::patch(
             '/events/{event}/categories/{category}/competitions/{competition}/scores',
             [CompetitionScoreController::class, 'update'],

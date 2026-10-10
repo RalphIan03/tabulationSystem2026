@@ -23,7 +23,8 @@ final class UpdateCompetitionScoringMethodRequest extends FormRequest
             && $category instanceof Category
             && $competition instanceof Competition
             && (string) $category->event_id === (string) $event->getKey()
-            && (string) $competition->category_id === (string) $category->getKey();
+            && (string) $competition->category_id === (string) $category->getKey()
+            && $competition->canBeConfiguredBy($this->user());
     }
 
     /** @return array<string, array<int, mixed>> */

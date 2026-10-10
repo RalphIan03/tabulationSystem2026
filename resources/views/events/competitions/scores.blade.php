@@ -26,6 +26,9 @@
                 <div class="flex flex-wrap items-center gap-2">
                     <span class="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-maroon-100 ring-1 ring-inset ring-white/15">{{ $category->name }}</span>
                     <span class="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-maroon-100 ring-1 ring-inset ring-white/15">{{ $competition->scoring_method->label() }}</span>
+                    @if ($competition->usesCriteriaScoring())
+                        <span class="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-maroon-100 ring-1 ring-inset ring-white/15">{{ $competition->judge_count }} {{ \Illuminate\Support\Str::plural('judge', $competition->judge_count) }}</span>
+                    @endif
                     <span @class([
                         'rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset',
                         'bg-emerald-400/15 text-emerald-200 ring-emerald-300/20' => $competition->scoresAreFinalized(),
@@ -38,6 +41,8 @@
             <div class="flex flex-wrap gap-2">
                 <a href="{{ route('events.categories.competitions.show', [$event, $category, $competition]) }}" class="inline-flex h-10 items-center justify-center rounded-xl border border-white/25 px-4 text-sm font-semibold text-white transition hover:bg-white/10">Configure contest</a>
                 <a href="{{ route('events.leaderboard', $event) }}" class="inline-flex h-10 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-maroon-800 transition hover:bg-maroon-50">View leaderboard</a>
+                <a href="{{ route('events.categories.competitions.scores.export', [$event, $category, $competition, 'format' => 'xlsx']) }}" download data-export-download data-loading-text="Exporting Excel…" class="inline-flex h-10 items-center justify-center rounded-xl border border-white/25 px-4 text-sm font-semibold text-white transition hover:bg-white/10">Export Excel</a>
+                <a href="{{ route('events.categories.competitions.scores.export', [$event, $category, $competition, 'format' => 'pdf']) }}" download data-export-download data-loading-text="Exporting PDF…" class="inline-flex h-10 items-center justify-center rounded-xl border border-white/25 px-4 text-sm font-semibold text-white transition hover:bg-white/10">Export PDF</a>
             </div>
         </div>
     </section>
@@ -101,7 +106,7 @@
             $hasRankings = $standings->isNotEmpty();
             $hasSavedScores = $resultsByParticipant->contains(function ($result) use ($competition) {
                 return $result->has_entry && ($competition->usesCriteriaScoring()
-                    ? $result->criterionScores->isNotEmpty()
+                    ? $result->criteriaScoreSummary($competition)['rankable']
                     : $result->wins !== null);
             });
         @endphp
@@ -122,6 +127,9 @@
                     <h3 class="text-lg font-semibold text-slate-950">Score sheet</h3>
                     <p class="mt-1 text-sm text-slate-500">Uncheck Has entry to exclude a participant from rankings, podium results, and non-podium points. Save a base score before entering a deduction.</p>
                     <p class="mt-1 text-xs text-slate-400">Tie ranking: {{ $event->tie_ranking_method->label() }}.</p>
+                    @if ($competition->usesCriteriaScoring() && $competition->judge_count > 1)
+                        <p class="mt-1 text-xs text-slate-500">Each criterion uses the average of {{ $competition->judge_count }} judge scores. Rankings and deductions become available after every judge scores each criterion for a participant.</p>
+                    @endif
                 </div>
                 @if ($canEditScores)
                     <div class="flex flex-wrap items-center gap-2">
@@ -177,12 +185,15 @@
                         @foreach ($event->participants as $participant)
                             @php
                                 $result = $resultsByParticipant->get($participant->id);
-                                $criterionScores = $result?->criterionScores->keyBy('criterion_id') ?? collect();
+                                $criterionScores = $result?->criterionScores->groupBy('criterion_id') ?? collect();
+                                $criteriaSummary = $competition->usesCriteriaScoring() && $result
+                                    ? $result->criteriaScoreSummary($competition)
+                                    : null;
                                 $standing = $standings->first(fn ($row) => $row['participant']->is($participant));
                                 $entryField = "entries.{$participant->id}";
                                 $hasEntry = (bool) old($entryField, $result?->has_entry ?? true);
                                 $hasSavedScore = $competition->usesCriteriaScoring()
-                                    ? $criterionScores->isNotEmpty()
+                                    ? ($criteriaSummary['rankable'] ?? false)
                                     : $result?->wins !== null;
                             @endphp
                             <tr data-rank="{{ $standing['rank'] ?? '' }}" class="align-middle hover:bg-slate-50/70">
@@ -217,10 +228,24 @@
                                 </td>
                                 @if ($competition->usesCriteriaScoring())
                                     @foreach ($competition->criteria as $criterion)
-                                        @php($field = "scores.{$participant->id}.{$criterion->id}")
                                         <td class="px-4 py-4 text-center">
-                                            <input name="scores[{{ $participant->id }}][{{ $criterion->id }}]" type="number" min="0" max="{{ $criterion->max_score }}" step="0.01" value="{{ old($field, $criterionScores->get($criterion->id)?->score) }}" @disabled(! $canEditScores) class="h-10 w-28 rounded-lg border border-slate-300 px-3 text-center text-sm outline-none transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10" aria-label="{{ $criterion->name }} score for {{ $participant->name }}">
-                                            @error($field)<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                            @if ($competition->judge_count === 1)
+                                                @php($field = "scores.{$participant->id}.{$criterion->id}")
+                                                <input name="scores[{{ $participant->id }}][{{ $criterion->id }}]" type="number" min="0" max="{{ $criterion->max_score }}" step="0.01" value="{{ old($field, $criterionScores->get($criterion->id)?->firstWhere('judge_number', 1)?->score) }}" @disabled(! $canEditScores) class="h-10 w-28 rounded-lg border border-slate-300 px-3 text-center text-sm outline-none transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10" aria-label="{{ $criterion->name }} score for {{ $participant->name }}">
+                                                @error($field)<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                            @else
+                                                <div class="grid gap-2">
+                                                    @for ($judge = 1; $judge <= $competition->judge_count; $judge++)
+                                                        @php($field = "scores.{$participant->id}.{$criterion->id}.{$judge}")
+                                                        <label class="flex items-center justify-between gap-2 text-xs text-slate-600">
+                                                            <span class="whitespace-nowrap">Judge {{ $judge }}</span>
+                                                            <input name="scores[{{ $participant->id }}][{{ $criterion->id }}][{{ $judge }}]" type="number" min="0" max="{{ $criterion->max_score }}" step="0.01" value="{{ old($field, $criterionScores->get($criterion->id)?->firstWhere('judge_number', $judge)?->score) }}" @disabled(! $canEditScores) class="h-9 w-24 rounded-lg border border-slate-300 px-2 text-center text-sm outline-none transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10" aria-label="Judge {{ $judge }} {{ $criterion->name }} score for {{ $participant->name }}">
+                                                        </label>
+                                                        @error($field)<p class="text-xs text-red-600">{{ $message }}</p>@enderror
+                                                    @endfor
+                                                    <p class="border-t border-slate-100 pt-1 text-xs font-semibold text-maroon-800">Average: {{ isset($criteriaSummary['averages'][$criterion->id]) ? number_format($criteriaSummary['averages'][$criterion->id], 2) : '—' }}</p>
+                                                </div>
+                                            @endif
                                         </td>
                                     @endforeach
                                 @else

@@ -91,6 +91,46 @@ indicator?.addEventListener('cancel', (event) => {
     }
 });
 
+const downloadExport = async (link) => {
+    showLoading(link.dataset.loadingText ?? 'Exporting scores…');
+    let failed = false;
+
+    try {
+        const response = await fetch(link.href, { credentials: 'same-origin' });
+        const disposition = response.headers.get('Content-Disposition');
+
+        if (!response.ok || !disposition?.toLowerCase().startsWith('attachment;')) {
+            throw new Error('The export response was not a downloadable file.');
+        }
+
+        const file = await response.blob();
+
+        if (file.size === 0) {
+            throw new Error('The export file was empty.');
+        }
+
+        const filename = disposition.match(/filename="([^"]+)"/i)?.[1]
+            ?? `contest-scores.${link.href.endsWith('/pdf') ? 'pdf' : 'xlsx'}`;
+        const fileUrl = URL.createObjectURL(file);
+        const downloadLink = document.createElement('a');
+        downloadLink.href = fileUrl;
+        downloadLink.download = filename;
+        downloadLink.hidden = true;
+        document.body.append(downloadLink);
+        downloadLink.click();
+        downloadLink.remove();
+        window.setTimeout(() => URL.revokeObjectURL(fileUrl), 60_000);
+    } catch {
+        failed = true;
+    } finally {
+        resetLoading();
+    }
+
+    if (failed) {
+        window.alert('The export could not be completed. Please try again.');
+    }
+};
+
 document.addEventListener('submit', (event) => {
     const form = event.target;
 
@@ -141,8 +181,6 @@ document.addEventListener('click', (event) => {
 
     if (
         !(link instanceof HTMLAnchorElement)
-        || link.matches('[data-no-loading]')
-        || link.hasAttribute('download')
         || (link.target && link.target !== '_self')
         || event.metaKey
         || event.ctrlKey
@@ -163,8 +201,21 @@ document.addEventListener('click', (event) => {
         return;
     }
 
+    const isExportDownload = link.matches('[data-export-download]') && url.origin === window.location.origin;
+
+    if (!isExportDownload && (link.matches('[data-no-loading]') || link.hasAttribute('download'))) {
+        return;
+    }
+
     if (pageIsLoading) {
         event.preventDefault();
+
+        return;
+    }
+
+    if (isExportDownload) {
+        event.preventDefault();
+        void downloadExport(link);
 
         return;
     }

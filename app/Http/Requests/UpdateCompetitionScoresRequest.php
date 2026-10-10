@@ -61,17 +61,27 @@ final class UpdateCompetitionScoresRequest extends FormRequest
             'entries.*' => ['boolean'],
             'scores' => ['required', Rule::array($participantIds)],
         ];
+        $judgeNumbers = array_map('strval', range(1, $competition->judge_count));
 
         foreach ($participantIds as $participantId) {
             $rules["scores.{$participantId}"] = ['nullable', Rule::array($criterionIds)];
 
             foreach ($criteria as $criterion) {
-                $rules["scores.{$participantId}.{$criterion->getKey()}"] = [
-                    'nullable',
-                    'numeric',
-                    'min:0',
-                    'max:'.$criterion->max_score,
-                ];
+                $field = "scores.{$participantId}.{$criterion->getKey()}";
+
+                if ($competition->judge_count === 1) {
+                    $rules[$field] = ['nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:'.$criterion->max_score];
+
+                    continue;
+                }
+
+                $rules[$field] = ['nullable', Rule::array($judgeNumbers)];
+
+                foreach ($judgeNumbers as $judgeNumber) {
+                    $rules["{$field}.{$judgeNumber}"] = [
+                        'nullable', 'numeric', 'decimal:0,2', 'min:0', 'max:'.$criterion->max_score,
+                    ];
+                }
             }
         }
 
@@ -83,6 +93,7 @@ final class UpdateCompetitionScoresRequest extends FormRequest
     {
         return [
             'scores.*.*.max' => 'A score cannot exceed the criterion maximum.',
+            'scores.*.*.*.max' => 'A judge score cannot exceed the criterion maximum.',
             'wins.*.integer' => 'Wins must be a whole number.',
         ];
     }

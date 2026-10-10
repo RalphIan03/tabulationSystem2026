@@ -24,26 +24,36 @@ final class StoreCriterionRequest extends FormRequest
             && $competition instanceof Competition
             && (string) $category->event_id === (string) $event->getKey()
             && (string) $competition->category_id === (string) $category->getKey()
-            && $competition->usesCriteriaScoring();
+            && $competition->usesCriteriaScoring()
+            && $competition->canBeConfiguredBy($this->user());
     }
 
     /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
         $competition = $this->route('competition');
+        $uniqueName = Rule::unique('criteria', 'name')
+            ->where(fn (Builder $query): Builder => $query->where(
+                'competition_id',
+                $competition instanceof Competition ? $competition->getKey() : null,
+            ));
+
+        if ($this->has('criteria')) {
+            return [
+                'criteria' => ['required', 'array', 'min:1', 'max:50'],
+                'criteria.*.name' => ['required', 'string', 'max:255', 'distinct:ignore_case', $uniqueName],
+                'criteria.*.max_score' => ['required', 'numeric', 'decimal:0,2', 'gt:0', 'max:999999.99'],
+            ];
+        }
 
         return [
             'criterion_name' => [
                 'required',
                 'string',
                 'max:255',
-                Rule::unique('criteria', 'name')
-                    ->where(fn (Builder $query): Builder => $query->where(
-                        'competition_id',
-                        $competition instanceof Competition ? $competition->getKey() : null,
-                    )),
+                $uniqueName,
             ],
-            'max_score' => ['required', 'numeric', 'gt:0', 'max:999999.99'],
+            'max_score' => ['required', 'numeric', 'decimal:0,2', 'gt:0', 'max:999999.99'],
         ];
     }
 
@@ -52,6 +62,8 @@ final class StoreCriterionRequest extends FormRequest
     {
         return [
             'criterion_name.unique' => 'This criterion already exists in the contest.',
+            'criteria.*.name.unique' => 'This criterion already exists in the contest.',
+            'criteria.*.name.distinct' => 'Criterion names must be different within this batch.',
         ];
     }
 }

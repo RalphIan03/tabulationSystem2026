@@ -30,11 +30,19 @@
             </div>
 
             <div class="flex flex-wrap items-center gap-3">
+                @if (auth()->user()->isAdmin())
+                    <button id="open-event-details-dialog" type="button" class="inline-flex h-11 items-center justify-center rounded-xl bg-white px-5 text-sm font-semibold text-maroon-800 transition hover:bg-maroon-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/30">Edit event details</button>
+                @endif
+
                 <a href="{{ route('events.leaderboard', $event) }}" class="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/30 bg-maroon-950/30 px-5 text-sm font-semibold text-white transition hover:bg-white/10 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/30">
                     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <path d="M4 19V9m6 10V5m6 14v-7m4 7H2" stroke-linecap="round" stroke-linejoin="round" />
                     </svg>
                     Current leaderboard
+                </a>
+
+                <a href="{{ route('leaderboards.show', $event) }}" target="_blank" rel="noopener noreferrer" class="inline-flex h-11 items-center justify-center rounded-xl border border-white/30 bg-maroon-950/30 px-5 text-sm font-semibold text-white transition hover:bg-white/10 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/30">
+                    Public leaderboard
                 </a>
 
                 @if (auth()->user()->isAdmin())
@@ -67,11 +75,62 @@
         </div>
     </section>
 
+    @if (auth()->user()->isAdmin())
+        <dialog id="event-details-dialog" aria-labelledby="event-details-title" class="user-dialog rounded-2xl bg-white p-0 text-slate-900 shadow-2xl">
+            <div class="max-h-[90vh] overflow-y-auto">
+                <div class="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-6 py-5">
+                    <div>
+                        <h3 id="event-details-title" class="text-xl font-semibold text-slate-950">Edit event details</h3>
+                        <p class="mt-1 text-sm text-slate-500">Update the event name and inclusive dates.</p>
+                    </div>
+                    <button type="button" data-event-details-close class="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" aria-label="Close event details dialog">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke-linecap="round" /></svg>
+                    </button>
+                </div>
+
+                <form method="POST" action="{{ route('events.details.update', $event) }}" class="space-y-4 p-6" data-loading-text="Updating event details…">
+                    @csrf
+                    @method('PATCH')
+                    <input type="hidden" name="_form" value="event_details">
+
+                    @if (old('_form') === 'event_details' && $errors->any())
+                        <p class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">Please correct the highlighted event details.</p>
+                    @endif
+
+                    <div>
+                        <label for="edit_event_name" class="mb-1.5 block text-sm font-semibold text-slate-700">Event name</label>
+                        <input id="edit_event_name" name="event_name" type="text" value="{{ old('_form') === 'event_details' ? old('event_name') : $event->name }}" required maxlength="255" class="h-11 w-full rounded-xl border border-slate-300 px-4 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                        @error('event_name')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                    </div>
+
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <label for="edit_event_start_date" class="mb-1.5 block text-sm font-semibold text-slate-700">Start date</label>
+                            <input id="edit_event_start_date" name="start_date" type="date" value="{{ old('_form') === 'event_details' ? old('start_date') : $event->start_date->format('Y-m-d') }}" required class="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                            @error('start_date')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                        </div>
+                        <div>
+                            <label for="edit_event_end_date" class="mb-1.5 block text-sm font-semibold text-slate-700">End date</label>
+                            <input id="edit_event_end_date" name="end_date" type="date" value="{{ old('_form') === 'event_details' ? old('end_date') : $event->end_date->format('Y-m-d') }}" required class="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                            @error('end_date')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
+                        <button type="button" data-event-details-close class="h-11 rounded-xl border border-slate-300 px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Cancel</button>
+                        <button type="submit" class="h-11 rounded-xl bg-maroon-700 px-5 text-sm font-semibold text-white transition hover:bg-maroon-800">Save event details</button>
+                    </div>
+                </form>
+            </div>
+        </dialog>
+    @endif
+
     <section class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div class="border-b border-slate-200 px-6 py-5">
             <h3 class="text-lg font-semibold text-slate-950">Tie ranking rule</h3>
             <p class="mt-1 text-sm text-slate-500">Choose how positions continue after tied scores or wins. This applies to every contest and its leaderboard points.</p>
         </div>
+        @if ($canEditTieRanking)
         <form method="POST" action="{{ route('events.tie-ranking.update', $event) }}" class="p-5 sm:p-6" data-loading-text="Saving tie ranking rule…">
             @csrf
             @method('PATCH')
@@ -96,6 +155,9 @@
                 <button type="submit" class="h-11 rounded-xl bg-maroon-700 px-5 text-sm font-semibold text-white transition hover:bg-maroon-800">Save tie ranking rule</button>
             </div>
         </form>
+        @else
+            <p class="p-5 text-sm text-slate-600 sm:p-6">Current rule: <span class="font-semibold text-slate-900">{{ $event->tie_ranking_method->label() }}</span>. Finalized scores lock this setting for auditors.</p>
+        @endif
     </section>
 
     <div class="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
@@ -146,6 +208,7 @@
                                 <p class="mt-0.5 text-xs text-slate-400">{{ $participant->reference_no ?: 'No reference number' }}</p>
                             </div>
 
+                            @if (! in_array($participant->id, $lockedParticipantIds, true))
                             <form method="POST" action="{{ route('events.participants.destroy', [$event, $participant]) }}" onsubmit="return confirm('Delete this participant? This action cannot be undone.')">
                                 @csrf
                                 @method('DELETE')
@@ -155,6 +218,7 @@
                                     </svg>
                                 </button>
                             </form>
+                            @endif
                         </div>
 
                         <details class="group mt-3">
@@ -270,12 +334,7 @@
                             <p class="mt-0.5 text-xs text-slate-400">{{ $category->competitions->count() }} {{ Str::plural('contest', $category->competitions->count()) }}</p>
                         </div>
 
-                        <form method="POST" action="{{ route('events.categories.competitions.store', [$event, $category]) }}" class="flex flex-col gap-2 sm:flex-row">
-                            @csrf
-                            <label for="competition_name_{{ $category->id }}" class="sr-only">Contest name for {{ $category->name }}</label>
-                            <input id="competition_name_{{ $category->id }}" name="competition_name" type="text" required class="h-10 min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10 sm:w-64" placeholder="New contest name">
-                            <button type="submit" class="h-10 rounded-lg bg-maroon-700 px-4 text-sm font-semibold text-white transition hover:bg-maroon-800">Add contest</button>
-                        </form>
+                        <button type="button" data-contest-dialog-open="add-contest-dialog-{{ $category->id }}" class="h-10 rounded-lg bg-maroon-700 px-4 text-sm font-semibold text-white transition hover:bg-maroon-800">Add contest</button>
                     </div>
 
                     <div class="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">
@@ -321,6 +380,69 @@
                             </div>
                         @endforelse
                     </div>
+                    <dialog id="add-contest-dialog-{{ $category->id }}" aria-labelledby="add-contest-title-{{ $category->id }}" class="user-dialog rounded-2xl bg-white p-0 text-slate-900 shadow-2xl">
+                        <div class="max-h-[90vh] overflow-y-auto">
+                            <div class="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-6 py-5">
+                                <div>
+                                    <h3 id="add-contest-title-{{ $category->id }}" class="text-xl font-semibold text-slate-950">Add contest</h3>
+                                    <p class="mt-1 text-sm text-slate-500">Set up a contest in {{ $category->name }}.</p>
+                                </div>
+                                <button type="button" data-contest-dialog-close class="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" aria-label="Close add contest dialog">
+                                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke-linecap="round" /></svg>
+                                </button>
+                            </div>
+
+                            <form method="POST" action="{{ route('events.categories.competitions.store', [$event, $category]) }}" class="space-y-5 p-6" data-loading-text="Creating contest…" data-contest-form>
+                                @csrf
+                                <input type="hidden" name="_form" value="add_contest">
+                                <input type="hidden" name="category_id" value="{{ $category->id }}">
+
+                                @if (old('_form') === 'add_contest' && (string) old('category_id') === (string) $category->id && $errors->any())
+                                    <p role="alert" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">Please correct the highlighted contest details.</p>
+                                @endif
+
+                                <div>
+                                    <label for="competition_name_{{ $category->id }}" class="mb-1.5 block text-sm font-semibold text-slate-700">Contest name</label>
+                                    <input id="competition_name_{{ $category->id }}" name="competition_name" type="text" value="{{ old('_form') === 'add_contest' && (string) old('category_id') === (string) $category->id ? old('competition_name') : '' }}" maxlength="255" required class="h-11 w-full rounded-xl border border-slate-300 px-4 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10" placeholder="e.g. Basketball">
+                                    @if (old('_form') === 'add_contest' && (string) old('category_id') === (string) $category->id)
+                                        @error('competition_name')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                    @endif
+                                </div>
+
+                                <fieldset>
+                                    <legend class="mb-2 text-sm font-semibold text-slate-700">Winner determination</legend>
+                                    <div class="grid gap-3 sm:grid-cols-2">
+                                        @foreach (\App\Enums\CompetitionScoringMethod::cases() as $method)
+                                            <label class="flex cursor-pointer gap-3 rounded-xl border border-slate-200 p-4 transition hover:border-maroon-300 hover:bg-maroon-50/40">
+                                                <input name="scoring_method" type="radio" value="{{ $method->value }}" @checked((old('_form') === 'add_contest' && (string) old('category_id') === (string) $category->id ? old('scoring_method') : \App\Enums\CompetitionScoringMethod::Criteria->value) === $method->value) required class="mt-1 border-slate-300 text-maroon-700 focus:ring-maroon-600">
+                                                <span>
+                                                    <span class="block text-sm font-semibold text-slate-900">{{ $method->label() }}</span>
+                                                    <span class="mt-1 block text-xs leading-5 text-slate-500">{{ $method->description() }}</span>
+                                                </span>
+                                            </label>
+                                        @endforeach
+                                    </div>
+                                    @if (old('_form') === 'add_contest' && (string) old('category_id') === (string) $category->id)
+                                        @error('scoring_method')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                    @endif
+                                </fieldset>
+
+                                <div data-contest-judge-field>
+                                    <label for="competition_judge_count_{{ $category->id }}" class="mb-1.5 block text-sm font-semibold text-slate-700">Number of judges</label>
+                                    <input id="competition_judge_count_{{ $category->id }}" name="judge_count" type="number" min="1" max="10" step="1" value="{{ old('_form') === 'add_contest' && (string) old('category_id') === (string) $category->id ? old('judge_count', 1) : 1 }}" required class="h-11 w-28 rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                                    <p class="mt-1 text-xs text-slate-500">Each judge scores every criterion; final scores use their average.</p>
+                                    @if (old('_form') === 'add_contest' && (string) old('category_id') === (string) $category->id)
+                                        @error('judge_count')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                    @endif
+                                </div>
+
+                                <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
+                                    <button type="button" data-contest-dialog-close class="h-11 rounded-xl border border-slate-300 px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Cancel</button>
+                                    <button type="submit" class="h-11 rounded-xl bg-maroon-700 px-5 text-sm font-semibold text-white transition hover:bg-maroon-800">Create contest</button>
+                                </div>
+                            </form>
+                        </div>
+                    </dialog>
                 </section>
             @empty
                 <div class="rounded-xl border border-dashed border-slate-300 px-6 py-12 text-center">
@@ -331,3 +453,57 @@
         </div>
     </section>
 @endsection
+
+@push('scripts')
+    <script>
+        (() => {
+            document.querySelectorAll('[data-contest-dialog-open]').forEach((button) => {
+                button.addEventListener('click', () => document.getElementById(button.dataset.contestDialogOpen)?.showModal());
+            });
+
+            document.querySelectorAll('[id^="add-contest-dialog-"]').forEach((dialog) => {
+                const form = dialog.querySelector('[data-contest-form]');
+                const judgeField = dialog.querySelector('[data-contest-judge-field]');
+                const judgeInput = judgeField?.querySelector('input');
+                const syncJudgeField = () => {
+                    const criteriaBased = form?.querySelector('input[name="scoring_method"]:checked')?.value === 'criteria';
+                    judgeField.hidden = ! criteriaBased;
+                    judgeInput.required = criteriaBased;
+                };
+
+                form?.querySelectorAll('input[name="scoring_method"]').forEach((input) => input.addEventListener('change', syncJudgeField));
+                dialog.querySelectorAll('[data-contest-dialog-close]').forEach((button) => {
+                    button.addEventListener('click', () => dialog.close());
+                });
+                dialog.addEventListener('click', (event) => {
+                    if (event.target === dialog) dialog.close();
+                });
+                syncJudgeField();
+
+                if (@json(old('_form') === 'add_contest' && $errors->any()) && form?.querySelector('input[name="category_id"]')?.value === @json((string) old('category_id'))) {
+                    dialog.showModal();
+                }
+            });
+        })();
+    </script>
+    @if (auth()->user()->isAdmin())
+        <script>
+            (() => {
+                const dialog = document.getElementById('event-details-dialog');
+                const openButton = document.getElementById('open-event-details-dialog');
+
+                openButton?.addEventListener('click', () => dialog?.showModal());
+                dialog?.querySelectorAll('[data-event-details-close]').forEach((button) => {
+                    button.addEventListener('click', () => dialog.close());
+                });
+                dialog?.addEventListener('click', (event) => {
+                    if (event.target === dialog) dialog.close();
+                });
+
+                if (@json(old('_form') === 'event_details' && $errors->any())) {
+                    dialog?.showModal();
+                }
+            })();
+        </script>
+    @endif
+@endpush

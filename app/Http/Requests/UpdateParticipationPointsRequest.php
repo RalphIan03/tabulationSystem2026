@@ -21,14 +21,15 @@ final class UpdateParticipationPointsRequest extends FormRequest
             && $category instanceof Category
             && $competition instanceof Competition
             && (string) $category->event_id === (string) $event->getKey()
-            && (string) $competition->category_id === (string) $category->getKey();
+            && (string) $competition->category_id === (string) $category->getKey()
+            && $competition->canBeConfiguredBy($this->user());
     }
 
     /** @return array<string, array<int, string>> */
     public function rules(): array
     {
         return [
-            'non_podium_points' => ['required', 'numeric', 'min:0', 'max:999999.99'],
+            'non_podium_points' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:999999.99'],
         ];
     }
 }

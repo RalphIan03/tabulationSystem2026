@@ -35,7 +35,7 @@ final class UpdateCompetitionDeductionsRequest extends FormRequest
             return [];
         }
 
-        $competition->loadMissing('results.criterionScores');
+        $competition->loadMissing('criteria', 'results.criterionScores');
         $maximumDeductions = [];
 
         foreach ($competition->results as $result) {
@@ -44,9 +44,7 @@ final class UpdateCompetitionDeductionsRequest extends FormRequest
             }
 
             $baseScore = $competition->usesCriteriaScoring()
-                ? (float) $result->criterionScores->sum(
-                    static fn ($score): float => (float) $score->score,
-                )
+                ? $result->criteriaScoreSummary($competition)['gross']
                 : ($result->wins === null ? null : (float) $result->wins);
 
             if ($baseScore !== null) {
@@ -73,6 +71,7 @@ final class UpdateCompetitionDeductionsRequest extends FormRequest
             $rules["deductions.{$participantId}"] = [
                 'nullable',
                 'numeric',
+                'decimal:0,2',
                 'min:0',
                 'max:'.$maximum,
             ];

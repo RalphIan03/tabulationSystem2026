@@ -21,7 +21,8 @@ final class StoreRankScoreRequest extends FormRequest
             && $category instanceof Category
             && $competition instanceof Competition
             && (string) $category->event_id === (string) $event->getKey()
-            && (string) $competition->category_id === (string) $category->getKey();
+            && (string) $competition->category_id === (string) $category->getKey()
+            && $competition->canBeConfiguredBy($this->user());
     }
 
     /** @return array<string, array<int, string>> */
@@ -29,7 +30,7 @@ final class StoreRankScoreRequest extends FormRequest
     {
         return [
             'rank' => ['required', 'integer', 'min:1', 'max:1000'],
-            'points' => ['required', 'numeric', 'min:0', 'max:999999.99'],
+            'points' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:999999.99'],
         ];
     }
 }

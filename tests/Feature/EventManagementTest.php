@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Enums\AccountRole;
+use App\Enums\CompetitionScoringMethod;
 use App\Enums\ScoringSystem;
 use App\Enums\TieRankingMethod;
 use App\Models\Category;
@@ -54,6 +55,64 @@ final class EventManagementTest extends TestCase
             'tie_ranking_method' => TieRankingMethod::SkipPositions->value,
             'leaderboard_frozen' => false,
         ]);
+    }
+
+    public function test_admin_can_edit_event_name_and_dates_from_the_configuration_page(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        $event = Event::factory()->create([
+            'name' => 'Original Event',
+            'start_date' => '2026-10-01',
+            'end_date' => '2026-10-03',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('events.show', $event))
+            ->assertOk()
+            ->assertSee('id="event-details-dialog"', escape: false)
+            ->assertSee('value="Original Event"', escape: false)
+            ->assertSee('value="2026-10-01"', escape: false);
+
+        $this->actingAs($admin)
+            ->patch(route('events.details.update', $event), [
+                'event_name' => 'Updated Event',
+                'start_date' => '2026-10-05',
+                'end_date' => '2026-10-07',
+            ])
+            ->assertRedirect(route('events.show', $event));
+
+        $event->refresh();
+        $this->assertSame('Updated Event', $event->name);
+        $this->assertSame('2026-10-05', $event->start_date->format('Y-m-d'));
+        $this->assertSame('2026-10-07', $event->end_date->format('Y-m-d'));
+    }
+
+    public function test_event_detail_changes_are_admin_only_and_dates_are_validated(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        $auditor = User::factory()->create(['role' => AccountRole::Auditor]);
+        $event = Event::factory()->create(['name' => 'Unchanged Event']);
+
+        $this->actingAs($auditor)
+            ->get(route('events.show', $event))
+            ->assertOk()
+            ->assertDontSee('id="event-details-dialog"', escape: false);
+
+        $this->actingAs($auditor)
+            ->patch(route('events.details.update', $event), [
+                'event_name' => 'Unauthorized',
+                'start_date' => '2026-10-05',
+                'end_date' => '2026-10-07',
+            ])->assertForbidden();
+
+        $this->actingAs($admin)
+            ->patch(route('events.details.update', $event), [
+                'event_name' => 'Invalid Event',
+                'start_date' => '2026-10-07',
+                'end_date' => '2026-10-05',
+            ])->assertSessionHasErrors('end_date');
+
+        $this->assertSame('Unchanged Event', $event->refresh()->name);
     }
 
     public function test_auditor_can_configure_the_event_tie_rule(): void
@@ -150,6 +209,68 @@ final class EventManagementTest extends TestCase
             ->assertSee('Solo Performance')
             ->assertSee('Current leaderboard')
             ->assertSee('Enter scores');
+    }
+
+    public function test_add_contest_dialog_creates_a_preconfigured_criteria_contest(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        $event = Event::factory()->create();
+        $category = $event->categories()->create(['name' => 'Senior Division']);
+
+        $this->actingAs($admin)
+            ->get(route('events.show', $event))
+            ->assertOk()
+            ->assertSee('id="add-contest-dialog-'.$category->id.'"', escape: false)
+            ->assertSee('Number of judges');
+
+        $this->actingAs($admin)
+            ->post(route('events.categories.competitions.store', [$event, $category]), [
+                'competition_name' => 'Solo Performance',
+                'scoring_method' => CompetitionScoringMethod::Criteria->value,
+                'judge_count' => 3,
+            ])->assertRedirect(route('events.show', $event));
+
+        $this->assertDatabaseHas('competitions', [
+            'category_id' => $category->id,
+            'name' => 'Solo Performance',
+            'scoring_method' => CompetitionScoringMethod::Criteria->value,
+            'judge_count' => 3,
+        ]);
+    }
+
+    public function test_wins_contest_uses_one_judge_and_rejects_invalid_preliminary_configuration(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        $event = Event::factory()->create();
+        $category = $event->categories()->create(['name' => 'Sports']);
+        $route = route('events.categories.competitions.store', [$event, $category]);
+
+        $this->actingAs($admin)->post($route, [
+            'competition_name' => 'Basketball',
+            'scoring_method' => CompetitionScoringMethod::Wins->value,
+            'judge_count' => 7,
+        ])->assertRedirect(route('events.show', $event));
+
+        $this->assertDatabaseHas('competitions', [
+            'name' => 'Basketball',
+            'scoring_method' => CompetitionScoringMethod::Wins->value,
+            'judge_count' => 1,
+        ]);
+
+        $this->actingAs($admin)->post($route, [
+            'competition_name' => 'Invalid contest',
+            'scoring_method' => 'unknown',
+            'judge_count' => 11,
+        ])->assertSessionHasErrors('scoring_method');
+
+        $this->actingAs($admin)->post($route, [
+            'competition_name' => 'Too many judges',
+            'scoring_method' => CompetitionScoringMethod::Criteria->value,
+            'judge_count' => 11,
+        ])->assertSessionHasErrors('judge_count');
+
+        $this->assertDatabaseMissing('competitions', ['name' => 'Invalid contest']);
+        $this->assertDatabaseMissing('competitions', ['name' => 'Too many judges']);
     }
 
     public function test_category_from_another_event_cannot_receive_a_competition(): void

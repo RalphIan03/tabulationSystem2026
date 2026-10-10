@@ -13,7 +13,11 @@ final class UpdateEventTieRankingRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->route('event') instanceof Event;
+        $event = $this->route('event');
+
+        return $event instanceof Event
+            && ($this->user()?->isAdmin() === true
+                || ! $event->competitions()->whereNotNull('scores_finalized_at')->exists());
     }
 
     /** @return array<string, array<int, mixed>> */

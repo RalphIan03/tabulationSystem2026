@@ -35,12 +35,17 @@
         </div>
     </section>
 
+    @if (! $canEditConfiguration)
+        <p class="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm font-medium text-amber-900">This contest is finalized. Configuration is read-only for auditors; an administrator can still make corrections.</p>
+    @endif
+
     <section class="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div class="border-b border-slate-200 px-6 py-5">
             <h3 class="text-lg font-semibold text-slate-950">Winner determination</h3>
             <p class="mt-1 text-sm text-slate-500">Choose how winners are determined for this contest.</p>
         </div>
 
+        @if ($canEditConfiguration)
         <form method="POST" action="{{ route('events.categories.competitions.scoring-method.update', [$event, $category, $competition]) }}" class="p-5">
             @csrf
             @method('PATCH')
@@ -74,6 +79,9 @@
                 <button type="submit" class="h-11 rounded-xl bg-maroon-700 px-5 text-sm font-semibold text-white transition hover:bg-maroon-800">Save scoring method</button>
             </div>
         </form>
+        @else
+            <p class="p-5 text-sm text-slate-600">Current method: <span class="font-semibold text-slate-900">{{ $competition->scoring_method->label() }}</span></p>
+        @endif
     </section>
 
     <div @class(['mt-6 grid gap-6', 'xl:grid-cols-2' => $competition->usesCriteriaScoring()])>
@@ -89,20 +97,75 @@
                 </div>
             </div>
 
-            <form method="POST" action="{{ route('events.categories.competitions.criteria.store', [$event, $category, $competition]) }}" class="grid gap-3 border-b border-slate-200 bg-slate-50/70 p-5 sm:grid-cols-[1fr_9rem_auto]">
+            <div class="border-b border-slate-200 bg-slate-50/70 p-5">
+                <p class="text-sm font-semibold text-slate-900">Number of judges</p>
+                <p class="mt-1 text-xs leading-5 text-slate-500">Each judge scores every criterion. The final criterion score is the average of all judges, and these averages are added for the contest total.</p>
+                @if ($canEditConfiguration && ! $judgeCountLocked)
+                    <form method="POST" action="{{ route('events.categories.competitions.judge-count.update', [$event, $category, $competition]) }}" data-loading-text="Saving judge count…" class="mt-3 flex flex-wrap items-end gap-3">
+                        @csrf
+                        @method('PATCH')
+                        <div>
+                            <label for="judge_count" class="mb-1 block text-xs font-medium text-slate-600">Judges (1–10)</label>
+                            <input id="judge_count" name="judge_count" type="number" min="1" max="10" step="1" value="{{ old('judge_count', $competition->judge_count) }}" required class="h-11 w-28 rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                        </div>
+                        <button type="submit" class="h-11 rounded-xl bg-maroon-700 px-5 text-sm font-semibold text-white transition hover:bg-maroon-800">Save judge count</button>
+                    </form>
+                    @error('judge_count')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                @else
+                    <p class="mt-3 text-sm font-semibold text-maroon-800">{{ $competition->judge_count }} {{ \Illuminate\Support\Str::plural('judge', $competition->judge_count) }}</p>
+                    @if ($judgeCountLocked)
+                        <p class="mt-1 text-xs text-slate-500">Judge count is locked after scores are entered. Reset this contest’s scores to change it.</p>
+                    @endif
+                @endif
+            </div>
+
+            @if ($canEditConfiguration)
+            @php
+                $draftCriteria = is_array(old('criteria')) && count(old('criteria')) > 0
+                    ? old('criteria')
+                    : [['name' => '', 'max_score' => 100]];
+            @endphp
+            <form method="POST" action="{{ route('events.categories.competitions.criteria.store', [$event, $category, $competition]) }}" class="border-b border-slate-200 bg-slate-50/70 p-5" data-criteria-form data-loading-text="Saving criteria…">
                 @csrf
-                <div>
-                    <label for="criterion_name" class="sr-only">Criterion name</label>
-                    <input id="criterion_name" name="criterion_name" type="text" value="{{ old('criterion_name') }}" required class="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10" placeholder="e.g. Technique">
-                    @error('criterion_name')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                <p class="text-sm font-semibold text-slate-900">Add judging criteria</p>
+                <p class="mt-1 text-xs text-slate-500">Add the fields you need, then save them together.</p>
+                @error('criteria')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                <div class="mt-4 space-y-3" data-criteria-rows>
+                    @foreach ($draftCriteria as $index => $draftCriterion)
+                        <div class="grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[1fr_9rem_auto] sm:items-start" data-criterion-row>
+                            <div>
+                                <label for="criterion_name_{{ $index }}" class="mb-1 block text-xs font-medium text-slate-600">Criterion name</label>
+                                <input id="criterion_name_{{ $index }}" name="criteria[{{ $index }}][name]" type="text" value="{{ is_array($draftCriterion) ? ($draftCriterion['name'] ?? '') : '' }}" maxlength="255" required class="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10" placeholder="e.g. Technique">
+                                @error("criteria.$index.name")<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                            </div>
+                            <div>
+                                <label for="criterion_max_score_{{ $index }}" class="mb-1 block text-xs font-medium text-slate-600">Maximum score</label>
+                                <input id="criterion_max_score_{{ $index }}" name="criteria[{{ $index }}][max_score]" type="number" min="0.01" max="999999.99" step="0.01" value="{{ is_array($draftCriterion) ? ($draftCriterion['max_score'] ?? '') : '' }}" required class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                                @error("criteria.$index.max_score")<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                            </div>
+                            <button type="button" data-criterion-remove class="h-11 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40 sm:mt-5">Remove</button>
+                        </div>
+                    @endforeach
                 </div>
-                <div>
-                    <label for="max_score" class="sr-only">Maximum score</label>
-                    <input id="max_score" name="max_score" type="number" min="0.01" max="999999.99" step="0.01" value="{{ old('max_score', 100) }}" required class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10" placeholder="Max score">
-                    @error('max_score')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    <button type="button" data-criterion-add class="h-11 rounded-xl border border-maroon-200 bg-white px-4 text-sm font-semibold text-maroon-700 transition hover:bg-maroon-50">+ Add another criterion</button>
+                    <button type="submit" class="h-11 rounded-xl bg-maroon-700 px-5 text-sm font-semibold text-white transition hover:bg-maroon-800">Save criteria</button>
                 </div>
-                <button type="submit" class="h-11 rounded-xl bg-maroon-700 px-4 text-sm font-semibold text-white transition hover:bg-maroon-800">Add</button>
             </form>
+            <template id="criterion-row-template">
+                <div class="grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[1fr_9rem_auto] sm:items-start" data-criterion-row>
+                    <div>
+                        <label for="criterion_name___INDEX__" class="mb-1 block text-xs font-medium text-slate-600">Criterion name</label>
+                        <input id="criterion_name___INDEX__" name="criteria[__INDEX__][name]" type="text" maxlength="255" required class="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10" placeholder="e.g. Presentation">
+                    </div>
+                    <div>
+                        <label for="criterion_max_score___INDEX__" class="mb-1 block text-xs font-medium text-slate-600">Maximum score</label>
+                        <input id="criterion_max_score___INDEX__" name="criteria[__INDEX__][max_score]" type="number" min="0.01" max="999999.99" step="0.01" value="100" required class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                    </div>
+                    <button type="button" data-criterion-remove class="h-11 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40 sm:mt-5">Remove</button>
+                </div>
+            </template>
+            @endif
 
             <div class="divide-y divide-slate-100">
                 @forelse ($competition->criteria as $criterion)
@@ -111,6 +174,7 @@
                             <p class="text-sm font-semibold text-slate-900">{{ $criterion->name }}</p>
                             <p class="mt-0.5 text-xs text-slate-400">Maximum score: {{ number_format((float) $criterion->max_score, 2) }}</p>
                         </div>
+                        @if ($canEditConfiguration)
                         <form method="POST" action="{{ route('events.categories.competitions.criteria.destroy', [$event, $category, $competition, $criterion]) }}" onsubmit="return confirm('Delete this criterion?')">
                             @csrf
                             @method('DELETE')
@@ -120,6 +184,7 @@
                                 </svg>
                             </button>
                         </form>
+                        @endif
                     </div>
                 @empty
                     <p class="px-6 py-10 text-center text-sm text-slate-400">No judging criteria configured.</p>
@@ -154,6 +219,7 @@
                 </div>
             </div>
 
+            @if ($canEditConfiguration)
             <form method="POST" action="{{ route('events.categories.competitions.rank-scores.store', [$event, $category, $competition]) }}" class="grid gap-3 border-b border-slate-200 bg-slate-50/70 p-5 sm:grid-cols-[8rem_1fr_auto]">
                 @csrf
                 <div>
@@ -169,7 +235,9 @@
                 <button type="submit" class="h-11 rounded-xl bg-maroon-700 px-4 text-sm font-semibold text-white transition hover:bg-maroon-800">Save</button>
                 <p class="text-xs text-slate-400 sm:col-span-3">Saving an existing rank updates its points.</p>
             </form>
+            @endif
 
+            @if ($canEditConfiguration)
             <form method="POST" action="{{ route('events.categories.competitions.participation-points.update', [$event, $category, $competition]) }}" class="border-b border-slate-200 bg-maroon-50/50 p-5">
                 @csrf
                 @method('PATCH')
@@ -188,6 +256,9 @@
                 </div>
                 @error('non_podium_points')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
             </form>
+            @else
+                <p class="border-b border-slate-200 p-5 text-sm text-slate-600">Non-podium participation points: <span class="font-semibold text-slate-900">{{ number_format((float) $competition->non_podium_points, 2) }}</span></p>
+            @endif
 
             <div class="overflow-x-auto">
                 @if ($competition->rankScores->isNotEmpty())
@@ -205,11 +276,15 @@
                                     <td class="px-6 py-4 font-semibold text-slate-900">#{{ $rankScore->rank }}</td>
                                     <td class="px-6 py-4 text-slate-600">{{ number_format((float) $rankScore->points, 2) }}</td>
                                     <td class="px-6 py-4 text-right">
+                                        @if ($canEditConfiguration)
                                         <form method="POST" action="{{ route('events.categories.competitions.rank-scores.destroy', [$event, $category, $competition, $rankScore]) }}" onsubmit="return confirm('Remove scoring for this rank?')">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="text-xs font-semibold text-red-600 hover:text-red-800">Remove</button>
                                         </form>
+                                        @else
+                                            <span class="text-xs text-slate-400">Locked</span>
+                                        @endif
                                     </td>
                                 </tr>
                             @endforeach
@@ -222,3 +297,48 @@
         </section>
     </div>
 @endsection
+
+@push('scripts')
+    <script>
+        (() => {
+            const form = document.querySelector('[data-criteria-form]');
+            const rows = form?.querySelector('[data-criteria-rows]');
+            const template = document.getElementById('criterion-row-template');
+
+            if (!form || !rows || !template) return;
+
+            let nextIndex = {{ max(array_map('intval', array_keys($draftCriteria ?? [0]))) + 1 }};
+            const updateRemoveButtons = () => {
+                rows.querySelectorAll('[data-criterion-remove]').forEach((button) => {
+                    button.disabled = rows.querySelectorAll('[data-criterion-row]').length === 1;
+                });
+            };
+
+            form.querySelector('[data-criterion-add]')?.addEventListener('click', () => {
+                const row = template.content.firstElementChild.cloneNode(true);
+                row.querySelectorAll('[id], [name], [for]').forEach((element) => {
+                    ['id', 'name', 'for'].forEach((attribute) => {
+                        if (element.hasAttribute(attribute)) {
+                            element.setAttribute(attribute, element.getAttribute(attribute).replaceAll('__INDEX__', String(nextIndex)));
+                        }
+                    });
+                });
+                nextIndex += 1;
+                rows.append(row);
+                updateRemoveButtons();
+                row.querySelector('input[name$="[name]"]')?.focus();
+            });
+
+            rows.addEventListener('click', (event) => {
+                const button = event.target.closest('[data-criterion-remove]');
+
+                if (!button || rows.querySelectorAll('[data-criterion-row]').length === 1) return;
+
+                button.closest('[data-criterion-row]')?.remove();
+                updateRemoveButtons();
+            });
+
+            updateRemoveButtons();
+        })();
+    </script>
+@endpush

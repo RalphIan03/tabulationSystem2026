@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Enums\CompetitionScoringMethod;
 use App\Models\Category;
 use App\Models\Event;
 use Illuminate\Database\Query\Builder;
@@ -38,6 +39,8 @@ final class StoreCompetitionRequest extends FormRequest
                         $category instanceof Category ? $category->getKey() : null,
                     )),
             ],
+            'scoring_method' => ['sometimes', 'required', Rule::enum(CompetitionScoringMethod::class)],
+            'judge_count' => ['exclude_unless:scoring_method,criteria', 'required', 'integer', 'between:1,10'],
         ];
     }
 

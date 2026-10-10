@@ -130,6 +130,7 @@ final class UserManagementTest extends TestCase
 
         $this->assertGuest();
     }
+
     public function test_users_page_displays_add_modal_and_account_table(): void
     {
         $admin = User::factory()->create(['role' => AccountRole::Admin]);
@@ -149,4 +150,23 @@ final class UserManagementTest extends TestCase
             ->assertSee('table.auditor');
     }
 
+    public function test_admin_can_toggle_visibility_of_new_password_fields_without_exposing_stored_passwords(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        $account = User::factory()->create([
+            'role' => AccountRole::Auditor,
+            'password' => 'stored-secret-password',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('users.index'))
+            ->assertOk()
+            ->assertSee('aria-controls="add_password"', escape: false)
+            ->assertSee('aria-controls="add_password_confirmation"', escape: false)
+            ->assertSee('aria-controls="edit_password_'.$account->id.'"', escape: false)
+            ->assertSee('aria-controls="edit_password_confirmation_'.$account->id.'"', escape: false)
+            ->assertSee('data-password-toggle', escape: false)
+            ->assertDontSee('stored-secret-password')
+            ->assertDontSee($account->password);
+    }
 }

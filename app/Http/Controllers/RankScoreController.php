@@ -11,6 +11,7 @@ use App\Models\Competition;
 use App\Models\Event;
 use App\Models\RankScore;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 final class RankScoreController extends Controller
 {
@@ -50,11 +51,14 @@ final class RankScoreController extends Controller
     }
 
     public function destroy(
+        Request $request,
         Event $event,
         Category $category,
         Competition $competition,
         RankScore $rankScore,
     ): RedirectResponse {
+        abort_unless($competition->canBeConfiguredBy($request->user()), 403);
+
         $rankScore->delete();
 
         return to_route('events.categories.competitions.show', [

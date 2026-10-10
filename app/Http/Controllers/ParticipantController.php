@@ -9,6 +9,7 @@ use App\Http\Requests\UpdateParticipantRequest;
 use App\Models\Event;
 use App\Models\Participant;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Throwable;
@@ -91,8 +92,14 @@ final class ParticipantController extends Controller
             ->with('status', 'Participant updated successfully.');
     }
 
-    public function destroy(Event $event, Participant $participant): RedirectResponse
+    public function destroy(Request $request, Event $event, Participant $participant): RedirectResponse
     {
+        if ($request->user()?->isAdmin() !== true) {
+            abort_if($participant->competitionResults()
+                ->whereHas('competition', static fn ($query) => $query->whereNotNull('scores_finalized_at'))
+                ->exists(), 403);
+        }
+
         $profilePicturePath = $participant->profile_picture_path;
 
         $participant->delete();

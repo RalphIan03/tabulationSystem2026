@@ -192,12 +192,18 @@
                     </div>
                     <div>
                         <label for="add_password" class="mb-1.5 block text-sm font-semibold text-slate-700">Password</label>
-                        <input id="add_password" name="password" type="password" required autocomplete="new-password" class="h-11 w-full rounded-xl border border-slate-300 px-4 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                        <div class="relative">
+                            <input id="add_password" name="password" type="password" required autocomplete="new-password" class="h-11 w-full rounded-xl border border-slate-300 px-4 pr-20 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                            <button type="button" data-password-toggle data-password-label="password" aria-controls="add_password" aria-pressed="false" aria-label="Show password" class="absolute inset-y-0 right-0 flex items-center px-4 text-sm font-semibold text-slate-500 transition hover:text-maroon-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-maroon-600">Show</button>
+                        </div>
                         <p class="mt-1 text-xs text-slate-400">Use at least 8 characters.</p>
                     </div>
                     <div>
                         <label for="add_password_confirmation" class="mb-1.5 block text-sm font-semibold text-slate-700">Confirm password</label>
-                        <input id="add_password_confirmation" name="password_confirmation" type="password" required autocomplete="new-password" class="h-11 w-full rounded-xl border border-slate-300 px-4 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                        <div class="relative">
+                            <input id="add_password_confirmation" name="password_confirmation" type="password" required autocomplete="new-password" class="h-11 w-full rounded-xl border border-slate-300 px-4 pr-20 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                            <button type="button" data-password-toggle data-password-label="password confirmation" aria-controls="add_password_confirmation" aria-pressed="false" aria-label="Show password confirmation" class="absolute inset-y-0 right-0 flex items-center px-4 text-sm font-semibold text-slate-500 transition hover:text-maroon-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-maroon-600">Show</button>
+                        </div>
                     </div>
                 </div>
 
@@ -261,11 +267,17 @@
                         </div>
                         <div>
                             <label for="edit_password_{{ $account->id }}" class="mb-1.5 block text-sm font-semibold text-slate-700">New password <span class="font-normal text-slate-400">(optional)</span></label>
-                            <input id="edit_password_{{ $account->id }}" name="password" type="password" autocomplete="new-password" class="h-11 w-full rounded-xl border border-slate-300 px-4 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                            <div class="relative">
+                                <input id="edit_password_{{ $account->id }}" name="password" type="password" autocomplete="new-password" class="h-11 w-full rounded-xl border border-slate-300 px-4 pr-20 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                                <button type="button" data-password-toggle data-password-label="new password" aria-controls="edit_password_{{ $account->id }}" aria-pressed="false" aria-label="Show new password" class="absolute inset-y-0 right-0 flex items-center px-4 text-sm font-semibold text-slate-500 transition hover:text-maroon-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-maroon-600">Show</button>
+                            </div>
                         </div>
                         <div>
                             <label for="edit_password_confirmation_{{ $account->id }}" class="mb-1.5 block text-sm font-semibold text-slate-700">Confirm new password</label>
-                            <input id="edit_password_confirmation_{{ $account->id }}" name="password_confirmation" type="password" autocomplete="new-password" class="h-11 w-full rounded-xl border border-slate-300 px-4 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                            <div class="relative">
+                                <input id="edit_password_confirmation_{{ $account->id }}" name="password_confirmation" type="password" autocomplete="new-password" class="h-11 w-full rounded-xl border border-slate-300 px-4 pr-20 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                                <button type="button" data-password-toggle data-password-label="new password confirmation" aria-controls="edit_password_confirmation_{{ $account->id }}" aria-pressed="false" aria-label="Show new password confirmation" class="absolute inset-y-0 right-0 flex items-center px-4 text-sm font-semibold text-slate-500 transition hover:text-maroon-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-maroon-600">Show</button>
+                            </div>
                         </div>
                     </div>
 
@@ -298,11 +310,41 @@
                 button.addEventListener('click', () => button.closest('dialog')?.close());
             });
 
+            document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const password = document.getElementById(button.getAttribute('aria-controls'));
+
+                    if (!(password instanceof HTMLInputElement)) {
+                        return;
+                    }
+
+                    const showPassword = password.type === 'password';
+                    password.type = showPassword ? 'text' : 'password';
+                    button.textContent = showPassword ? 'Hide' : 'Show';
+                    button.setAttribute('aria-pressed', String(showPassword));
+                    button.setAttribute('aria-label', `${showPassword ? 'Hide' : 'Show'} ${button.dataset.passwordLabel}`);
+                });
+            });
+
             document.querySelectorAll('dialog').forEach((dialog) => {
                 dialog.addEventListener('click', (event) => {
                     if (event.target === dialog) {
                         dialog.close();
                     }
+                });
+
+                dialog.addEventListener('close', () => {
+                    dialog.querySelectorAll('[data-password-toggle]').forEach((button) => {
+                        const password = document.getElementById(button.getAttribute('aria-controls'));
+
+                        if (password instanceof HTMLInputElement) {
+                            password.type = 'password';
+                        }
+
+                        button.textContent = 'Show';
+                        button.setAttribute('aria-pressed', 'false');
+                        button.setAttribute('aria-label', `Show ${button.dataset.passwordLabel}`);
+                    });
                 });
             });
 

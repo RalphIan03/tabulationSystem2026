@@ -31,6 +31,13 @@
         </div>
     </section>
 
+    <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 class="font-semibold text-slate-950">Share the public leaderboard</h3>
+        <p class="mt-1 text-sm text-slate-500">The general link opens the active event automatically. Use the event-specific link to share this event directly. Freezing hides rankings from public visitors.</p>
+        <a href="{{ route('leaderboards.index') }}" target="_blank" rel="noopener noreferrer" class="mt-3 block break-all text-sm font-semibold text-maroon-700 hover:underline">{{ route('leaderboards.index') }}</a>
+        <a href="{{ route('leaderboards.show', $event) }}" target="_blank" rel="noopener noreferrer" class="mt-2 block break-all text-xs font-medium text-slate-500 hover:underline">Event-specific: {{ route('leaderboards.show', $event) }}</a>
+    </section>
+
     <section class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div class="border-b border-slate-200 px-6 py-5">
             <p class="text-sm font-semibold text-maroon-700">Overall winner</p>
@@ -65,7 +72,7 @@
                             <th class="px-5 py-3.5 text-center font-semibold">Contest wins</th>
                             <th class="px-5 py-3.5 text-center font-semibold">Recorded wins</th>
                             <th class="px-5 py-3.5 text-center font-semibold">Contests entered</th>
-                            <th class="px-6 py-3.5 text-right font-semibold">Leaderboard points</th>
+                            <!-- <th class="px-6 py-3.5 text-right font-semibold">Leaderboard points</th> -->
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
@@ -76,7 +83,7 @@
                                 <td class="px-5 py-4 text-center font-semibold text-maroon-700">{{ $row['contest_wins'] }}</td>
                                 <td class="px-5 py-4 text-center text-slate-600">{{ $row['recorded_wins'] }}</td>
                                 <td class="px-5 py-4 text-center text-slate-600">{{ $row['contests_entered'] }}</td>
-                                <td class="px-6 py-4 text-right font-semibold text-slate-700">{{ number_format($row['leaderboard_points'], 2) }}</td>
+                                <!-- <td class="px-6 py-4 text-right font-semibold text-slate-700">{{ number_format($row['leaderboard_points'], 2) }}</td> -->
                             </tr>
                         @endforeach
                     </tbody>

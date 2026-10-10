@@ -50,12 +50,13 @@ final class CompetitionScoreManager
     {
         DB::transaction(function () use ($competition, $deductions): void {
             $competition->load([
+                'criteria',
                 'results.criterionScores',
             ]);
 
             foreach ($competition->results as $result) {
                 $hasBaseScore = $competition->usesCriteriaScoring()
-                    ? $result->criterionScores->isNotEmpty()
+                    ? $result->criteriaScoreSummary($competition)['rankable']
                     : $result->wins !== null;
 
                 if (! $result->has_entry
@@ -81,9 +82,24 @@ final class CompetitionScoreManager
             return false;
         }
 
-        $hasScores = $competition->usesCriteriaScoring()
-            ? $competition->results()->where('has_entry', true)->whereHas('criterionScores')->exists()
-            : $competition->results()->where('has_entry', true)->whereNotNull('wins')->exists();
+        if ($competition->usesCriteriaScoring()) {
+            $competition->load(['criteria', 'results.criterionScores']);
+            $enteredResults = $competition->results->filter(
+                static fn (CompetitionResult $result): bool => $result->has_entry && $result->criterionScores->isNotEmpty(),
+            );
+
+            if ($enteredResults->contains(
+                fn (CompetitionResult $result): bool => ! $result->criteriaScoreSummary($competition)['rankable'],
+            )) {
+                throw ValidationException::withMessages([
+                    'finalization' => 'Complete every configured judge score for entered participants before finalizing.',
+                ]);
+            }
+
+            $hasScores = $enteredResults->isNotEmpty();
+        } else {
+            $hasScores = $competition->results()->where('has_entry', true)->whereNotNull('wins')->exists();
+        }
 
         if (! $hasScores) {
             throw ValidationException::withMessages([
@@ -119,9 +135,10 @@ final class CompetitionScoreManager
                 : ($result?->has_entry ?? true);
 
             $hasScore = $criteria->contains(function ($criterion) use ($participantScores): bool {
-                $value = $participantScores[$criterion->getKey()] ?? null;
+                $values = $participantScores[$criterion->getKey()] ?? null;
+                $values = is_array($values) ? $values : [1 => $values];
 
-                return $value !== null && $value !== '';
+                return collect($values)->contains(static fn (mixed $value): bool => $value !== null && $value !== '');
             });
 
             if (! $hasScore) {
@@ -161,20 +178,26 @@ final class CompetitionScoreManager
                 : ['has_entry' => false, 'deduction' => 0]);
 
             foreach ($criteria as $criterion) {
-                $value = $participantScores[$criterion->getKey()] ?? null;
+                $values = $participantScores[$criterion->getKey()] ?? null;
+                $values = is_array($values) ? $values : [1 => $values];
 
-                if ($value === null || $value === '') {
-                    $result->criterionScores()
-                        ->where('criterion_id', $criterion->getKey())
-                        ->delete();
+                for ($judge = 1; $judge <= $competition->judge_count; $judge++) {
+                    $value = $values[$judge] ?? null;
 
-                    continue;
+                    if ($value === null || $value === '') {
+                        $result->criterionScores()
+                            ->where('criterion_id', $criterion->getKey())
+                            ->where('judge_number', $judge)
+                            ->delete();
+
+                        continue;
+                    }
+
+                    $result->criterionScores()->updateOrCreate(
+                        ['criterion_id' => $criterion->getKey(), 'judge_number' => $judge],
+                        ['score' => $value],
+                    );
                 }
-
-                $result->criterionScores()->updateOrCreate(
-                    ['criterion_id' => $criterion->getKey()],
-                    ['score' => $value],
-                );
             }
         }
     }

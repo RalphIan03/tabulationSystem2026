@@ -9,11 +9,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 final class CriterionScore extends Model
 {
-    protected $fillable = ['criterion_id', 'score'];
+    protected $fillable = ['criterion_id', 'judge_number', 'score'];
 
     protected function casts(): array
     {
-        return ['score' => 'decimal:2'];
+        return [
+            'judge_number' => 'integer',
+            'score' => 'decimal:2',
+        ];
     }
 
     public function result(): BelongsTo

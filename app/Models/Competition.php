@@ -14,11 +14,13 @@ final class Competition extends Model
     /** @var array<string, mixed> */
     protected $attributes = [
         'scoring_method' => 'criteria',
+        'judge_count' => 1,
     ];
 
     protected $fillable = [
         'name',
         'scoring_method',
+        'judge_count',
         'non_podium_points',
         'scores_finalized_at',
     ];
@@ -27,6 +29,7 @@ final class Competition extends Model
     {
         return [
             'scoring_method' => CompetitionScoringMethod::class,
+            'judge_count' => 'integer',
             'non_podium_points' => 'decimal:2',
             'scores_finalized_at' => 'immutable_datetime',
         ];
@@ -40,6 +43,12 @@ final class Competition extends Model
     public function scoresAreFinalized(): bool
     {
         return $this->scores_finalized_at !== null;
+    }
+
+    public function canBeConfiguredBy(?User $user): bool
+    {
+        return $user !== null
+            && (! $this->scoresAreFinalized() || $user->isAdmin());
     }
 
     public function category(): BelongsTo

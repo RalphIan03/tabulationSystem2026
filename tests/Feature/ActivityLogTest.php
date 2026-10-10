@@ -181,8 +181,37 @@ final class ActivityLogTest extends TestCase
         $response->assertOk()->assertDownload();
         $content = $response->streamedContent();
 
-        $this->assertStringContainsString('Date and time,Name,Username', $content);
-        $this->assertStringContainsString('CSV Auditor', $content);
-        $this->assertStringContainsString('Updated User #2 - CSV Target', $content);
+        $lines = array_values(array_filter(preg_split('/\r\n|\r|\n/', substr($content, 3))));
+        $headers = str_getcsv($lines[0], ',', '"', '');
+        $record = str_getcsv($lines[1], ',', '"', '');
+
+        $this->assertSame(['Date and time', 'Name', 'Username'], array_slice($headers, 0, 3));
+        $this->assertSame('CSV Auditor', $record[1]);
+        $this->assertSame('Updated User #2 - CSV Target', $record[6]);
+    }
+
+    public function test_csv_export_neutralizes_formula_values_after_whitespace(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        ActivityLog::query()->create([
+            'user_id' => $admin->id,
+            'actor_name' => " \t=1+1",
+            'interaction_type' => 'update',
+            'action' => 'users.update',
+            'description' => 'Updated a user account',
+            'method' => 'PATCH',
+            'path' => '/users/2',
+            'status_code' => 200,
+            'duration_ms' => 4,
+        ]);
+
+        $content = $this->actingAs($admin)
+            ->get(route('logs.download'))
+            ->assertOk()
+            ->streamedContent();
+        $lines = array_values(array_filter(preg_split('/\r\n|\r|\n/', substr($content, 3))));
+        $record = str_getcsv($lines[1], ',', '"', '');
+
+        $this->assertSame("' \t=1+1", $record[1]);
     }
 }

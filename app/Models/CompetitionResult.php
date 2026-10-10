@@ -35,4 +35,32 @@ final class CompetitionResult extends Model
     {
         return $this->hasMany(CriterionScore::class);
     }
+
+    /** @return array{averages: array<int, float|null>, gross: float|null, rankable: bool} */
+    public function criteriaScoreSummary(Competition $competition): array
+    {
+        $scoresByCriterion = $this->criterionScores
+            ->filter(fn (CriterionScore $score): bool => $score->judge_number >= 1
+                && $score->judge_number <= $competition->judge_count)
+            ->groupBy('criterion_id');
+        $averages = [];
+
+        foreach ($competition->criteria as $criterion) {
+            $judgeScores = $scoresByCriterion->get($criterion->getKey(), collect())->unique('judge_number');
+            $averages[$criterion->getKey()] = $judgeScores->count() === $competition->judge_count
+                ? round($judgeScores->sum(static fn (CriterionScore $score): float => (float) $score->score) / $competition->judge_count, 2)
+                : null;
+        }
+
+        $hasAverage = count(array_filter($averages, static fn (?float $average): bool => $average !== null)) > 0;
+        $rankable = $competition->judge_count === 1
+            ? $hasAverage
+            : $competition->criteria->isNotEmpty() && ! in_array(null, $averages, true);
+
+        return [
+            'averages' => $averages,
+            'gross' => $rankable ? round(array_sum($averages), 2) : null,
+            'rankable' => $rankable,
+        ];
+    }
 }

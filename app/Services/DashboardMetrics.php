@@ -93,8 +93,8 @@ final class DashboardMetrics
     {
         $today = today();
         $events = Event::query()
-            ->whereDate('start_date', '<=', $today)
-            ->whereDate('end_date', '>=', $today)
+            ->where('start_date', '<=', $today->toDateString())
+            ->where('end_date', '>=', $today->toDateString())
             ->withCount([
                 'participants',
                 'categories',

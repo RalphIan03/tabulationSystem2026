@@ -28,11 +28,7 @@
 
                 <div class="sidebar-header flex items-center justify-between px-5 py-5 lg:px-7 lg:py-7">
                     <a href="{{ route('dashboard') }}" class="sidebar-brand flex items-center gap-3" title="Tabulation management portal">
-                        <span class="grid h-11 w-11 place-items-center rounded-xl bg-maroon-600 text-white shadow-lg shadow-maroon-950/40">
-                            <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                <path d="M4 19V9m5 10V5m5 14v-7m5 7V3" stroke-linecap="round" />
-                            </svg>
-                        </span>
+                        <img src="{{ asset('images/um_logo.png') }}" alt="UM Digos College logo" width="44" height="44" class="h-11 w-11 shrink-0 object-contain">
                         <span class="sidebar-brand-copy">
                             <span class="block text-xs font-semibold uppercase tracking-[0.18em] text-maroon-300">Tabulation</span>
                             <span class="block text-base font-semibold">Management Portal</span>

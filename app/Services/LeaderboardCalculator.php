@@ -42,14 +42,12 @@ final class LeaderboardCalculator
         $rows = $competition->results
             ->filter(fn ($result): bool => $result->has_entry
                 && ($competition->usesCriteriaScoring()
-                    ? $result->criterionScores->isNotEmpty()
+                    ? $result->criteriaScoreSummary($competition)['rankable']
                     : $result->wins !== null))
             ->map(function ($result) use ($competition): array {
                 $wins = $competition->usesCriteriaScoring() ? null : (int) $result->wins;
                 $grossScore = $competition->usesCriteriaScoring()
-                    ? (float) $result->criterionScores->sum(
-                        static fn ($score): float => (float) $score->score,
-                    )
+                    ? (float) $result->criteriaScoreSummary($competition)['gross']
                     : (float) $wins;
                 $deduction = (float) $result->deduction;
 
@@ -75,9 +73,11 @@ final class LeaderboardCalculator
         $previousScore = null;
         $rank = 0;
         $tieRankingMethod = $event->tie_ranking_method;
+        $rankScores = $competition->rankScores->keyBy('rank');
 
         return $rows->map(function (array $row, int $index) use (
             $competition,
+            $rankScores,
             $tieRankingMethod,
             &$previousScore,
             &$rank,
@@ -88,7 +88,7 @@ final class LeaderboardCalculator
                     : $rank + 1;
             }
 
-            $rankScore = $competition->rankScores->firstWhere('rank', $rank);
+            $rankScore = $rankScores->get($rank);
             $row['rank'] = $rank;
             $row['leaderboard_points'] = $rankScore === null
                 ? (float) $competition->non_podium_points
@@ -154,7 +154,7 @@ final class LeaderboardCalculator
 
     private function competitionRelationsAreLoaded(Competition $competition): bool
     {
-        if (! $competition->relationLoaded('criteria')
+        if (($competition->usesCriteriaScoring() && ! $competition->relationLoaded('criteria'))
             || ! $competition->relationLoaded('rankScores')
             || ! $competition->relationLoaded('results')) {
             return false;
