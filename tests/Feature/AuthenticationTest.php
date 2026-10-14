@@ -20,7 +20,20 @@ final class AuthenticationTest extends TestCase
             ->assertOk()
             ->assertSee('Sign in to continue')
             ->assertSee('toggle-password')
+            ->assertSee('<link rel="icon" type="image/png" href="/images/um_logo.png">', false)
             ->assertSee('global-loading-indicator');
+    }
+
+    public function test_um_logo_is_used_as_favicon_on_dashboard_and_public_leaderboards(): void
+    {
+        $favicon = '<link rel="icon" type="image/png" href="/images/um_logo.png">';
+
+        $this->get('/leaderboards')->assertOk()->assertSee($favicon, false);
+
+        $this->actingAs(User::factory()->create())
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee($favicon, false);
     }
 
     public function test_user_can_sign_in_with_username_and_password(): void

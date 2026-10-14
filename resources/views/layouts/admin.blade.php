@@ -12,6 +12,7 @@
         </script>
 
         <title>@yield('title', 'Admin') | Tabulation System</title>
+        <link rel="icon" type="image/png" href="/images/um_logo.png">
 
         @fonts
         @vite(['resources/css/app.css', 'resources/js/app.js'])
