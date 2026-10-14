@@ -30,7 +30,7 @@ final class EventReadCache
      */
     public function adminEvents(Closure $resolver): Collection
     {
-        return Cache::remember('dashboard:admin:events:v1', 60, $resolver);
+        return $this->events('dashboard:admin:events:v2', $resolver);
     }
 
     /** @param Closure(): Collection<int, Event> $resolver
@@ -38,7 +38,7 @@ final class EventReadCache
      */
     public function auditorEvents(Closure $resolver): Collection
     {
-        return Cache::remember($this->auditorEventsKey(), 60, $resolver);
+        return $this->events($this->auditorEventsKey(), $resolver);
     }
 
     public function invalidateModel(Model $model): void
@@ -80,7 +80,7 @@ final class EventReadCache
     public function invalidateEvent(int $eventId): void
     {
         $this->invalidateLeaderboard($eventId);
-        Cache::forget('dashboard:admin:events:v1');
+        Cache::forget('dashboard:admin:events:v2');
         Cache::forget($this->auditorEventsKey());
     }
 
@@ -96,6 +96,23 @@ final class EventReadCache
 
     private function auditorEventsKey(): string
     {
-        return 'dashboard:auditor:events:'.today()->toDateString().':v1';
+        return 'dashboard:auditor:events:'.today()->toDateString().':v2';
+    }
+
+    /** @param Closure(): Collection<int, Event> $resolver
+     * @return Collection<int, Event>
+     */
+    private function events(string $key, Closure $resolver): Collection
+    {
+        $attributes = Cache::remember(
+            $key,
+            60,
+            static fn (): array => $resolver()
+                ->map(static fn (Event $event): array => $event->getAttributes())
+                ->values()
+                ->all(),
+        );
+
+        return Event::query()->hydrate($attributes);
     }
 }

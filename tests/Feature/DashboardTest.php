@@ -15,6 +15,32 @@ final class DashboardTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_admin_dashboard_renders_again_from_database_cache_with_restricted_serialization(): void
+    {
+        config()->set('cache.default', 'database');
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        Event::factory()->for($admin, 'creator')->create(['name' => 'Sports Day']);
+
+        $this->actingAs($admin)->get(route('dashboard'))->assertSee('Sports Day');
+
+        $this->get(route('dashboard'))->assertSee('Sports Day');
+    }
+
+    public function test_auditor_dashboard_renders_again_from_database_cache_with_restricted_serialization(): void
+    {
+        config()->set('cache.default', 'database');
+        $auditor = User::factory()->create(['role' => AccountRole::Auditor]);
+        Event::factory()->for($auditor, 'creator')->create([
+            'name' => 'Sports Day',
+            'start_date' => today()->subDay(),
+            'end_date' => today()->addDay(),
+        ]);
+
+        $this->actingAs($auditor)->get(route('dashboard'))->assertSee('Sports Day');
+
+        $this->get(route('dashboard'))->assertSee('Sports Day');
+    }
+
     public function test_event_changes_refresh_cached_dashboard_progress(): void
     {
         $admin = User::factory()->create(['role' => AccountRole::Admin]);
