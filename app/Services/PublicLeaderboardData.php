@@ -11,7 +11,10 @@ use Illuminate\Support\Str;
 
 final class PublicLeaderboardData
 {
-    public function __construct(private readonly LeaderboardCalculator $calculator) {}
+    public function __construct(
+        private readonly LeaderboardCalculator $calculator,
+        private readonly EventReadCache $cache,
+    ) {}
 
     /** @return array{rows: array<int, array<string, float|int|string|null>>, categories: array<int, array<string, mixed>>} */
     public function snapshot(Event $event, ?int $contestCategoryId = null): array
@@ -20,6 +23,21 @@ final class PublicLeaderboardData
             $event->categories()->findOrFail($contestCategoryId);
         }
 
+        $snapshot = $this->cache->leaderboard($event, fn (): array => $this->buildSnapshot($event));
+
+        if ($contestCategoryId !== null) {
+            $snapshot['categories'] = array_values(array_filter(
+                $snapshot['categories'],
+                static fn (array $category): bool => $category['id'] === $contestCategoryId,
+            ));
+        }
+
+        return $snapshot;
+    }
+
+    /** @return array{rows: array<int, array<string, float|int|string|null>>, categories: array<int, array<string, mixed>>} */
+    private function buildSnapshot(Event $event): array
+    {
         $event->load([
             'categories' => fn ($query) => $query->orderBy('name'),
             'categories.competitions' => fn ($query) => $query->whereNotNull('scores_finalized_at')->orderBy('name'),
@@ -38,7 +56,6 @@ final class PublicLeaderboardData
                 'points' => $row['leaderboard_points'],
             ])->all();
         $categories = $event->categories
-            ->when($contestCategoryId !== null, fn ($categories) => $categories->where('id', $contestCategoryId))
             ->map(fn ($category): array => [
                 'id' => $category->getKey(),
                 'name' => $category->name,

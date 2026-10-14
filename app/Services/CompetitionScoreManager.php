@@ -13,6 +13,8 @@ use Illuminate\Validation\ValidationException;
 
 final class CompetitionScoreManager
 {
+    public function __construct(private readonly EventReadCache $cache) {}
+
     /**
      * @param  Collection<int, Participant>  $participants
      * @param  array<string, mixed>  $data
@@ -43,6 +45,8 @@ final class CompetitionScoreManager
                 $data['entries'] ?? [],
             );
         });
+
+        $this->invalidateLeaderboard($competition);
     }
 
     /** @param array<int|string, mixed> $deductions */
@@ -71,6 +75,8 @@ final class CompetitionScoreManager
                 ]);
             }
         });
+
+        $this->invalidateLeaderboard($competition);
     }
 
     /** @return bool True when the contest was finalized; false when it was reopened. */
@@ -266,6 +272,15 @@ final class CompetitionScoreManager
                 'wins' => (int) $value,
             ]);
             $results->put($participant->getKey(), $result);
+        }
+    }
+
+    private function invalidateLeaderboard(Competition $competition): void
+    {
+        $eventId = $competition->category()->value('event_id');
+
+        if ($eventId !== null) {
+            $this->cache->invalidateLeaderboard((int) $eventId);
         }
     }
 }

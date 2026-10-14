@@ -14,6 +14,7 @@ final class CompetitionManager
 {
     public function __construct(
         private readonly ActivitySubjectCollector $subjects,
+        private readonly EventReadCache $cache,
     ) {}
 
     /**
@@ -60,6 +61,8 @@ final class CompetitionManager
                 $this->subjects->capture('reset', $competition);
             }
         });
+
+        $this->cache->invalidateEvent((int) $event->getKey());
 
         return $competitions->count();
     }

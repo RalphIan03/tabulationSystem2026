@@ -4,15 +4,87 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Enums\AccountRole;
 use App\Enums\CompetitionScoringMethod;
 use App\Models\Event;
+use App\Models\User;
+use App\Services\PublicLeaderboardData;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 final class PublicLeaderboardTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_repeated_public_snapshot_avoids_reloading_event_scoring_data(): void
+    {
+        $event = Event::factory()->create();
+        $event->categories()->create(['name' => 'Sports']);
+        $leaderboard = app(PublicLeaderboardData::class);
+
+        $leaderboard->snapshot($event);
+        $anotherEventInstance = $event->fresh();
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+
+        $snapshot = $leaderboard->snapshot($anotherEventInstance);
+
+        $this->assertSame([], DB::getQueryLog());
+        $this->assertSame('Sports', $snapshot['categories'][0]['name']);
+        DB::disableQueryLog();
+    }
+
+    public function test_saved_scores_refresh_cached_public_snapshot(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        $event = Event::factory()->for($admin, 'creator')->create();
+        $participant = $event->participants()->create(['name' => 'Alex Santos']);
+        $category = $event->categories()->create(['name' => 'Sports']);
+        $competition = $category->competitions()->create([
+            'name' => 'Basketball',
+            'scoring_method' => CompetitionScoringMethod::Wins,
+            'scores_finalized_at' => now(),
+        ]);
+        $competition->results()->create(['participant_id' => $participant->id, 'wins' => 2]);
+
+        $this->getJson(route('leaderboards.data', $event))
+            ->assertJsonPath('categories.0.contests.0.rows.0.result', '2 wins');
+
+        $this->actingAs($admin)
+            ->patch(route('events.categories.competitions.scores.update', [$event, $category, $competition]), [
+                'wins' => [$participant->id => 5],
+            ])
+            ->assertRedirect();
+
+        $this->getJson(route('leaderboards.data', $event))
+            ->assertJsonPath('categories.0.contests.0.rows.0.result', '5 wins');
+    }
+
+    public function test_participant_and_rank_configuration_changes_refresh_cached_public_snapshot(): void
+    {
+        $event = Event::factory()->create();
+        $participant = $event->participants()->create(['name' => 'Alex Santos']);
+        $category = $event->categories()->create(['name' => 'Sports']);
+        $competition = $category->competitions()->create([
+            'name' => 'Basketball',
+            'scoring_method' => CompetitionScoringMethod::Wins,
+            'scores_finalized_at' => now(),
+        ]);
+        $competition->results()->create(['participant_id' => $participant->id, 'wins' => 2]);
+
+        $this->getJson(route('leaderboards.data', $event))
+            ->assertJsonPath('rows.0.name', 'Alex Santos')
+            ->assertJsonPath('rows.0.points', 0);
+
+        $participant->update(['name' => 'Alex Reyes']);
+        $competition->rankScores()->create(['rank' => 1, 'points' => 100]);
+
+        $this->getJson(route('leaderboards.data', $event))
+            ->assertJsonPath('rows.0.name', 'Alex Reyes')
+            ->assertJsonPath('rows.0.points', 100);
+    }
 
     public function test_bare_url_opens_the_most_recent_active_event_in_overall_view(): void
     {

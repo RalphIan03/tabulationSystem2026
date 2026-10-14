@@ -15,6 +15,23 @@ final class DashboardTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_event_changes_refresh_cached_dashboard_progress(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        $event = Event::factory()->for($admin, 'creator')->create(['name' => 'Sports Day']);
+
+        $this->actingAs($admin)
+            ->get(route('dashboard'))
+            ->assertSee('Sports Day')
+            ->assertSee('0 of 0 contests finalized');
+
+        $category = $event->categories()->create(['name' => 'Sports']);
+        $category->competitions()->create(['name' => 'Basketball']);
+
+        $this->get(route('dashboard'))
+            ->assertSee('0 of 1 contest finalized');
+    }
+
     public function test_dashboard_displays_real_metrics_and_circular_event_progress(): void
     {
         $user = User::factory()->create(['role' => AccountRole::Admin]);

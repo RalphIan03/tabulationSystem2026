@@ -11,6 +11,8 @@ use Illuminate\Support\Collection;
 
 final class DashboardMetrics
 {
+    public function __construct(private readonly EventReadCache $cache) {}
+
     /**
      * @return array{
      *     events: Collection<int, array{
@@ -31,7 +33,7 @@ final class DashboardMetrics
      */
     public function forAdmin(): array
     {
-        $events = Event::query()
+        $events = $this->cache->adminEvents(fn (): Collection => Event::query()
             ->withCount([
                 'participants',
                 'competitions',
@@ -40,7 +42,7 @@ final class DashboardMetrics
             ])
             ->orderByDesc('start_date')
             ->orderByDesc('id')
-            ->get();
+            ->get());
 
         $eventProgress = $this->progress($events);
 
@@ -92,7 +94,7 @@ final class DashboardMetrics
     public function forAuditor(): array
     {
         $today = today();
-        $events = Event::query()
+        $events = $this->cache->auditorEvents(fn (): Collection => Event::query()
             ->where('is_active', true)
             ->where('start_date', '<=', $today->toDateString())
             ->where('end_date', '>=', $today->toDateString())
@@ -105,7 +107,7 @@ final class DashboardMetrics
             ])
             ->orderBy('end_date')
             ->orderBy('id')
-            ->get();
+            ->get());
 
         return [
             'events' => $this->progress($events),
