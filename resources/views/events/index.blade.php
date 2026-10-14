@@ -37,12 +37,15 @@
             @foreach ($events as $event)
                 @php
                     $today = now()->startOfDay();
-                    $status = $today->lt($event->start_date)
-                        ? 'Upcoming'
-                        : ($today->gt($event->end_date) ? 'Completed' : 'Active');
+                    $status = ! $event->is_active
+                        ? 'Inactive'
+                        : ($today->lt($event->start_date)
+                            ? 'Upcoming'
+                            : ($today->gt($event->end_date) ? 'Completed' : 'Active'));
                     $statusClasses = match ($status) {
                         'Active' => 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
                         'Upcoming' => 'bg-maroon-50 text-maroon-700 ring-maroon-600/20',
+                        'Inactive' => 'bg-amber-50 text-amber-700 ring-amber-600/20',
                         default => 'bg-slate-100 text-slate-600 ring-slate-500/20',
                     };
                 @endphp
@@ -82,13 +85,20 @@
                     </div>
                     </a>
 
-                    <div class="flex items-center justify-between gap-3 border-t border-slate-100 px-6 py-3">
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-6 py-3">
                         <a href="{{ route('events.leaderboard', $event) }}" class="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-semibold text-maroon-700 transition hover:bg-maroon-50 hover:text-maroon-900">
                             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19V9m6 10V5m6 14v-7m4 7H2" stroke-linecap="round" stroke-linejoin="round" /></svg>
                             Current leaderboard
                         </a>
 
                         @if (auth()->user()->isAdmin())
+                        <form method="POST" action="{{ route('events.toggle-status', $event, false) }}" data-loading-text="{{ $event->is_active ? 'Deactivating event…' : 'Activating event…' }}" onsubmit="return confirm('{{ $event->is_active ? 'Deactivate this event? Auditors will no longer see or access it.' : 'Activate this event? Auditors will be able to access it again.' }}')">
+                            @csrf
+                            @method('PATCH')
+                            <button type="submit" class="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-semibold transition {{ $event->is_active ? 'text-amber-700 hover:bg-amber-50' : 'text-emerald-700 hover:bg-emerald-50' }}">
+                                {{ $event->is_active ? 'Deactivate' : 'Activate' }}
+                            </button>
+                        </form>
                         <form method="POST" action="{{ route('events.destroy', $event, false) }}" data-loading-text="Deleting event…" onsubmit="return confirm('Delete this event? All participants, categories, contests, and scoring configurations will be permanently removed.')">
                             @csrf
                             @method('DELETE')

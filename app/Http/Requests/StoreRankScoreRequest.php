@@ -28,9 +28,25 @@ final class StoreRankScoreRequest extends FormRequest
     /** @return array<string, array<int, string>> */
     public function rules(): array
     {
+        if ($this->has('rank_scores')) {
+            return [
+                'rank_scores' => ['required', 'array', 'min:1', 'max:50'],
+                'rank_scores.*.rank' => ['required', 'integer', 'min:1', 'max:1000', 'distinct'],
+                'rank_scores.*.points' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:999999.99'],
+            ];
+        }
+
         return [
             'rank' => ['required', 'integer', 'min:1', 'max:1000'],
             'points' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:999999.99'],
+        ];
+    }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return [
+            'rank_scores.*.rank.distinct' => 'Ranks must be different within this batch.',
         ];
     }
 }

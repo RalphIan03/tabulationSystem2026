@@ -19,6 +19,7 @@ final class ActivityLogger
         'events.store' => 'Created an event',
         'events.destroy' => 'Deleted an event',
         'events.details.update' => 'Updated event name or dates',
+        'events.toggle-status' => 'Changed event activation status',
         'events.tie-ranking.update' => 'Updated event tie ranking rule',
         'events.leaderboard-freeze' => 'Changed leaderboard freeze status',
         'events.participants.store' => 'Added a participant',
@@ -36,12 +37,14 @@ final class ActivityLogger
         'events.categories.competitions.scores.finalization.update' => 'Changed contest score finalization',
         'events.categories.competitions.criteria.store' => 'Added scoring criteria',
         'events.categories.competitions.criteria.destroy' => 'Deleted a scoring criterion',
-        'events.categories.competitions.rank-scores.store' => 'Added a rank score',
+        'events.categories.competitions.rank-scores.store' => 'Saved rank scoring points',
         'events.categories.competitions.rank-scores.destroy' => 'Deleted a rank score',
         'events.categories.competitions.participation-points.update' => 'Updated participation points',
         'users.store' => 'Created a user account',
         'users.update' => 'Updated a user account',
         'users.toggle-status' => 'Changed a user account status',
+        'auditor-account.details.update' => 'Updated own account details',
+        'auditor-account.password.update' => 'Changed own password',
     ];
 
     public function __construct(

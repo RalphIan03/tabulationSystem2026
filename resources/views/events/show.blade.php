@@ -17,6 +17,9 @@
             <div>
                 <div class="flex flex-wrap items-center gap-2">
                     <span class="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-maroon-100 ring-1 ring-inset ring-white/15">{{ $event->scoringSystemLabel() }}</span>
+                    @unless ($event->is_active)
+                        <span class="rounded-full bg-amber-300 px-3 py-1 text-xs font-semibold text-amber-950">Inactive · hidden from auditors</span>
+                    @endunless
                     <span @class([
                         'rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset',
                         'bg-amber-400/15 text-amber-200 ring-amber-300/20' => $event->leaderboard_frozen,
@@ -32,6 +35,11 @@
             <div class="flex flex-wrap items-center gap-3">
                 @if (auth()->user()->isAdmin())
                     <button id="open-event-details-dialog" type="button" class="inline-flex h-11 items-center justify-center rounded-xl bg-white px-5 text-sm font-semibold text-maroon-800 transition hover:bg-maroon-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/30">Edit event details</button>
+                    <form method="POST" action="{{ route('events.toggle-status', $event, false) }}" data-loading-text="{{ $event->is_active ? 'Deactivating event…' : 'Activating event…' }}" onsubmit="return confirm('{{ $event->is_active ? 'Deactivate this event? Auditors will no longer see or access it.' : 'Activate this event? Auditors will be able to access it again.' }}')">
+                        @csrf
+                        @method('PATCH')
+                        <button type="submit" class="inline-flex h-11 items-center justify-center rounded-xl border border-white/30 bg-maroon-950/30 px-5 text-sm font-semibold text-white transition hover:bg-white/10">{{ $event->is_active ? 'Deactivate event' : 'Activate event' }}</button>
+                    </form>
                 @endif
 
                 <a href="{{ route('events.leaderboard', $event) }}" class="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/30 bg-maroon-950/30 px-5 text-sm font-semibold text-white transition hover:bg-white/10 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/30">

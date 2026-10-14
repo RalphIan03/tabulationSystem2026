@@ -11,7 +11,10 @@
                 <h2 class="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Welcome, {{ auth()->user()->name }}</h2>
                 <p class="mt-3 max-w-2xl text-sm leading-6 text-maroon-100/80">Manage active events, participants, categories, contests, and participant scoring.</p>
             </div>
-            <a href="{{ route('events.index') }}" class="inline-flex h-11 items-center justify-center rounded-xl bg-white px-5 text-sm font-semibold text-maroon-800 transition hover:bg-maroon-50">Open all events</a>
+            <div class="flex flex-wrap gap-3">
+                <a href="{{ route('events.index') }}" class="inline-flex h-11 items-center justify-center rounded-xl bg-white px-5 text-sm font-semibold text-maroon-800 transition hover:bg-maroon-50">Open all events</a>
+                <a href="{{ route('auditor-account.edit') }}" class="inline-flex h-11 items-center justify-center rounded-xl border border-white/30 px-5 text-sm font-semibold text-white transition hover:bg-white/10">My account</a>
+            </div>
         </div>
     </section>
 
@@ -86,6 +89,6 @@
 
     <section class="mt-6 rounded-2xl border border-maroon-200 bg-maroon-50/60 p-6">
         <h3 class="font-semibold text-maroon-950">Auditor access</h3>
-        <p class="mt-2 max-w-3xl text-sm leading-6 text-maroon-900/75">You can manage event participants, categories, contests, contest configuration, participant scores, score finalization, and view leaderboards. Event creation and deletion, leaderboard freezing, users, logs, and settings remain administrator-only.</p>
+        <p class="mt-2 max-w-3xl text-sm leading-6 text-maroon-900/75">You can manage event participants, categories, contests, contest configuration, participant scores, score finalization, and view leaderboards. You can update your own account under My account. Event creation and deletion, leaderboard freezing, users, logs, and system settings remain administrator-only.</p>
     </section>
 @endsection

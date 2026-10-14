@@ -220,21 +220,51 @@
             </div>
 
             @if ($canEditConfiguration)
-            <form method="POST" action="{{ route('events.categories.competitions.rank-scores.store', [$event, $category, $competition], false) }}" class="grid gap-3 border-b border-slate-200 bg-slate-50/70 p-5 sm:grid-cols-[8rem_1fr_auto]">
+            @php
+                $draftRankScores = is_array(old('rank_scores')) && count(old('rank_scores')) > 0
+                    ? old('rank_scores')
+                    : [['rank' => '', 'points' => '']];
+            @endphp
+            <form method="POST" action="{{ route('events.categories.competitions.rank-scores.store', [$event, $category, $competition], false) }}" class="border-b border-slate-200 bg-slate-50/70 p-5" data-rank-scores-form data-loading-text="Saving rank scores…">
                 @csrf
-                <div>
-                    <label for="rank" class="sr-only">Rank</label>
-                    <input id="rank" name="rank" type="number" min="1" max="1000" value="{{ old('rank') }}" required class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10" placeholder="Rank">
-                    @error('rank')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                <p class="text-sm font-semibold text-slate-900">Add rank scores</p>
+                <p class="mt-1 text-xs text-slate-500">Add multiple placements, then save them together. Existing ranks will have their points updated.</p>
+                @error('rank_scores')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                <div class="mt-4 space-y-3" data-rank-score-rows>
+                    @foreach ($draftRankScores as $index => $draftRankScore)
+                        <div class="grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[8rem_1fr_auto] sm:items-start" data-rank-score-row>
+                            <div>
+                                <label for="rank_score_rank_{{ $index }}" class="mb-1 block text-xs font-medium text-slate-600">Rank</label>
+                                <input id="rank_score_rank_{{ $index }}" name="rank_scores[{{ $index }}][rank]" type="number" min="1" max="1000" step="1" value="{{ is_array($draftRankScore) ? ($draftRankScore['rank'] ?? '') : '' }}" required class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10" placeholder="Rank">
+                                @error("rank_scores.$index.rank")<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                            </div>
+                            <div>
+                                <label for="rank_score_points_{{ $index }}" class="mb-1 block text-xs font-medium text-slate-600">Points awarded</label>
+                                <input id="rank_score_points_{{ $index }}" name="rank_scores[{{ $index }}][points]" type="number" min="0" max="999999.99" step="0.01" value="{{ is_array($draftRankScore) ? ($draftRankScore['points'] ?? '') : '' }}" required class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10" placeholder="Points awarded">
+                                @error("rank_scores.$index.points")<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                            </div>
+                            <button type="button" data-rank-score-remove class="h-11 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40 sm:mt-5">Remove</button>
+                        </div>
+                    @endforeach
                 </div>
-                <div>
-                    <label for="points" class="sr-only">Points</label>
-                    <input id="points" name="points" type="number" min="0" max="999999.99" step="0.01" value="{{ old('points') }}" required class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10" placeholder="Points awarded">
-                    @error('points')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    <button type="button" data-rank-score-add class="h-11 rounded-xl border border-maroon-200 bg-white px-4 text-sm font-semibold text-maroon-700 transition hover:bg-maroon-50">+ Add another rank</button>
+                    <button type="submit" class="h-11 rounded-xl bg-maroon-700 px-5 text-sm font-semibold text-white transition hover:bg-maroon-800">Save rank scores</button>
                 </div>
-                <button type="submit" class="h-11 rounded-xl bg-maroon-700 px-4 text-sm font-semibold text-white transition hover:bg-maroon-800">Save</button>
-                <p class="text-xs text-slate-400 sm:col-span-3">Saving an existing rank updates its points.</p>
             </form>
+            <template id="rank-score-row-template">
+                <div class="grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[8rem_1fr_auto] sm:items-start" data-rank-score-row>
+                    <div>
+                        <label for="rank_score_rank___INDEX__" class="mb-1 block text-xs font-medium text-slate-600">Rank</label>
+                        <input id="rank_score_rank___INDEX__" name="rank_scores[__INDEX__][rank]" type="number" min="1" max="1000" step="1" required class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10" placeholder="Rank">
+                    </div>
+                    <div>
+                        <label for="rank_score_points___INDEX__" class="mb-1 block text-xs font-medium text-slate-600">Points awarded</label>
+                        <input id="rank_score_points___INDEX__" name="rank_scores[__INDEX__][points]" type="number" min="0" max="999999.99" step="0.01" required class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10" placeholder="Points awarded">
+                    </div>
+                    <button type="button" data-rank-score-remove class="h-11 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40 sm:mt-5">Remove</button>
+                </div>
+            </template>
             @endif
 
             @if ($canEditConfiguration)
@@ -335,6 +365,47 @@
                 if (!button || rows.querySelectorAll('[data-criterion-row]').length === 1) return;
 
                 button.closest('[data-criterion-row]')?.remove();
+                updateRemoveButtons();
+            });
+
+            updateRemoveButtons();
+        })();
+
+        (() => {
+            const form = document.querySelector('[data-rank-scores-form]');
+            const rows = form?.querySelector('[data-rank-score-rows]');
+            const template = document.getElementById('rank-score-row-template');
+
+            if (!form || !rows || !template) return;
+
+            let nextIndex = {{ max(array_map('intval', array_keys($draftRankScores ?? [0]))) + 1 }};
+            const updateRemoveButtons = () => {
+                rows.querySelectorAll('[data-rank-score-remove]').forEach((button) => {
+                    button.disabled = rows.querySelectorAll('[data-rank-score-row]').length === 1;
+                });
+            };
+
+            form.querySelector('[data-rank-score-add]')?.addEventListener('click', () => {
+                const row = template.content.firstElementChild.cloneNode(true);
+                row.querySelectorAll('[id], [name], [for]').forEach((element) => {
+                    ['id', 'name', 'for'].forEach((attribute) => {
+                        if (element.hasAttribute(attribute)) {
+                            element.setAttribute(attribute, element.getAttribute(attribute).replaceAll('__INDEX__', String(nextIndex)));
+                        }
+                    });
+                });
+                nextIndex += 1;
+                rows.append(row);
+                updateRemoveButtons();
+                row.querySelector('input[name$="[rank]"]')?.focus();
+            });
+
+            rows.addEventListener('click', (event) => {
+                const button = event.target.closest('[data-rank-score-remove]');
+
+                if (!button || rows.querySelectorAll('[data-rank-score-row]').length === 1) return;
+
+                button.closest('[data-rank-score-row]')?.remove();
                 updateRemoveButtons();
             });
 

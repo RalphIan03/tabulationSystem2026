@@ -93,6 +93,7 @@ final class DashboardMetrics
     {
         $today = today();
         $events = Event::query()
+            ->where('is_active', true)
             ->where('start_date', '<=', $today->toDateString())
             ->where('end_date', '>=', $today->toDateString())
             ->withCount([
@@ -141,9 +142,11 @@ final class DashboardMetrics
                 'percentage' => $total === 0
                     ? 0
                     : (int) round(($finalized / $total) * 100),
-                'status' => $today->lt($event->start_date)
-                    ? 'Upcoming'
-                    : ($today->gt($event->end_date) ? 'Completed' : 'Active'),
+                'status' => ! $event->is_active
+                    ? 'Inactive'
+                    : ($today->lt($event->start_date)
+                        ? 'Upcoming'
+                        : ($today->gt($event->end_date) ? 'Completed' : 'Active')),
             ];
         });
     }

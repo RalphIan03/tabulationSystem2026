@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Middleware\EnsureEventIsVisibleToAuditor;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\EnsureUserIsAdmin;
+use App\Http\Middleware\EnsureUserIsAuditor;
 use App\Http\Middleware\LogUserInteraction;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -18,6 +20,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'active' => EnsureUserIsActive::class,
             'admin' => EnsureUserIsAdmin::class,
+            'auditor' => EnsureUserIsAuditor::class,
+            'visible-event' => EnsureEventIsVisibleToAuditor::class,
         ]);
         $middleware->appendToGroup('web', LogUserInteraction::class);
     })

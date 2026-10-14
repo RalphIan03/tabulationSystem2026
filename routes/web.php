@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\AuditorAccountController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CompetitionController;
@@ -32,8 +33,17 @@ Route::middleware('guest')->group(function (): void {
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->name('login.store');
 });
 
-Route::middleware(['auth', 'active'])->group(function (): void {
+Route::middleware(['auth', 'active', 'visible-event'])->group(function (): void {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    Route::middleware('auditor')->group(function (): void {
+        Route::get('/my-account', [AuditorAccountController::class, 'edit'])
+            ->name('auditor-account.edit');
+        Route::patch('/my-account/details', [AuditorAccountController::class, 'updateDetails'])
+            ->name('auditor-account.details.update');
+        Route::patch('/my-account/password', [AuditorAccountController::class, 'updatePassword'])
+            ->name('auditor-account.password.update');
+    });
 
     Route::middleware('admin')->group(function (): void {
         Route::resource('users', UserController::class)->only(['index', 'store', 'update']);
@@ -42,6 +52,8 @@ Route::middleware(['auth', 'active'])->group(function (): void {
         Route::post('/events', [EventController::class, 'store'])->name('events.store');
         Route::patch('/events/{event}/details', [EventController::class, 'updateDetails'])
             ->name('events.details.update');
+        Route::patch('/events/{event}/status', [EventController::class, 'toggleStatus'])
+            ->name('events.toggle-status');
         Route::delete('/events/{event}', [EventController::class, 'destroy'])
             ->name('events.destroy');
         Route::patch('/events/{event}/leaderboard-freeze', [EventController::class, 'toggleLeaderboardFreeze'])

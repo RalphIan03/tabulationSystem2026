@@ -27,6 +27,7 @@ final class Event extends Model
         'tie_ranking_method',
         'other_scoring_system',
         'leaderboard_frozen',
+        'is_active',
     ];
 
     protected function casts(): array
@@ -37,6 +38,7 @@ final class Event extends Model
             'scoring_system' => ScoringSystem::class,
             'tie_ranking_method' => TieRankingMethod::class,
             'leaderboard_frozen' => 'boolean',
+            'is_active' => 'boolean',
         ];
     }
 

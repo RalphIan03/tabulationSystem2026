@@ -27,20 +27,7 @@
                 <div class="absolute -right-8 top-36 h-72 w-72 rounded-full border border-white/10"></div>
 
                 <div class="relative flex items-center gap-2">
-                    <div class=" grid h-11 w-11 place-items-center rounded-xl text-maroon-700 shadow-lg shadow-maroon-950/20">
-                        <!-- <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                <path d="M4 19V9m5 10V5m5 14v-7m5 7V3" stroke-linecap="round" />
-                            </svg> -->
-                        <img src="{{asset('images/um_logo.png')}}" alt="">
-                        <!-- <img src="{{asset('images/pgits_logo.png')}}" alt=""> -->
-                    </div>
-                    <div class=" grid h-11 w-15 place-items-center rounded-xl text-maroon-700 shadow-lg shadow-maroon-950/20">
-                        <!-- <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                <path d="M4 19V9m5 10V5m5 14v-7m5 7V3" stroke-linecap="round" />
-                            </svg> -->
-                        <img src="{{asset('images/osa_logo.png')}}" alt="">
-                        <!-- <img src="{{asset('images/pgits_logo.png')}}" alt=""> -->
-                    </div>
+                    <img src="{{ asset('images/um_logo.png') }}" alt="UM Digos College logo" width="44" height="44" class="h-11 w-11 shrink-0 object-contain">
                     <div>
                         <!-- <p class="text-xs font-semibold uppercase tracking-[0.22em] text-maroon-200">Event management</p> -->
                         <p class="text-lg font-semibold">Event Tabulation System</p>
@@ -70,11 +57,7 @@
             <div class="flex items-center px-6 py-12 sm:px-12 lg:px-14">
                 <div class="mx-auto w-full max-w-sm">
                     <div class="mb-9 lg:hidden">
-                        <div class="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-maroon-700 text-white">
-                            <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                <path d="M4 19V9m5 10V5m5 14v-7m5 7V3" stroke-linecap="round" />
-                            </svg>
-                        </div>
+                        <img src="{{ asset('images/um_logo.png') }}" alt="UM Digos College logo" width="44" height="44" class="mb-4 h-11 w-11 object-contain">
                         <p class="font-semibold text-maroon-700">Tabulation System</p>
                     </div>
 

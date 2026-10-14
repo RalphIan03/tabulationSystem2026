@@ -70,6 +70,7 @@
                         $statusClasses = match ($progress['status']) {
                             'Active' => 'bg-emerald-50 text-emerald-700',
                             'Upcoming' => 'bg-maroon-50 text-maroon-700',
+                            'Inactive' => 'bg-amber-50 text-amber-700',
                             default => 'bg-slate-100 text-slate-600',
                         };
                     @endphp

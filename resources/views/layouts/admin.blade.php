@@ -66,6 +66,20 @@
                             <span class="sidebar-label">Events</span>
                         </a>
 
+                        @unless (auth()->user()->isAdmin())
+                            <a href="{{ route('auditor-account.edit') }}" title="My account" @if(request()->routeIs('auditor-account.*')) aria-current="page" @endif @class([
+                                'admin-sidebar-link flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition',
+                                'bg-maroon-600 text-white shadow-lg shadow-maroon-950/30' => request()->routeIs('auditor-account.*'),
+                                'text-slate-300 hover:bg-slate-900 hover:text-white' => ! request()->routeIs('auditor-account.*'),
+                            ])>
+                                <svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <circle cx="12" cy="8" r="4" />
+                                    <path d="M4 21a8 8 0 0 1 16 0" stroke-linecap="round" />
+                                </svg>
+                                <span class="sidebar-label">My account</span>
+                            </a>
+                        @endunless
+
                         @if (auth()->user()->isAdmin())
                             <a href="{{ route('users.index') }}" title="Users" @if(request()->routeIs('users.*')) aria-current="page" @endif @class([
                                 'admin-sidebar-link flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition',

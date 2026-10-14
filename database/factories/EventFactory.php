@@ -28,6 +28,7 @@ final class EventFactory extends Factory
             'tie_ranking_method' => TieRankingMethod::SkipPositions,
             'other_scoring_system' => null,
             'leaderboard_frozen' => false,
+            'is_active' => true,
         ];
     }
 }

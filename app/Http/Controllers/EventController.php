@@ -17,9 +17,10 @@ use Illuminate\View\View;
 
 final class EventController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
         $events = Event::query()
+            ->when(! $request->user()->isAdmin(), fn ($query) => $query->where('is_active', true))
             ->withCount(['participants', 'categories'])
             ->orderByDesc('start_date')
             ->get();
@@ -103,6 +104,14 @@ final class EventController extends Controller
 
         return to_route('events.show', $event)
             ->with('status', 'Event details updated successfully.');
+    }
+
+    public function toggleStatus(Event $event): RedirectResponse
+    {
+        $event->update(['is_active' => ! $event->is_active]);
+
+        return to_route('events.index')
+            ->with('status', $event->is_active ? 'Event activated successfully.' : 'Event deactivated successfully.');
     }
 
     public function updateTieRanking(UpdateEventTieRankingRequest $request, Event $event): RedirectResponse

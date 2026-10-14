@@ -12,6 +12,7 @@ use App\Models\Event;
 use App\Models\RankScore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 final class RankScoreController extends Controller
 {
@@ -21,16 +22,29 @@ final class RankScoreController extends Controller
         Category $category,
         Competition $competition,
     ): RedirectResponse {
-        $competition->rankScores()->updateOrCreate(
-            ['rank' => $request->integer('rank')],
-            ['points' => $request->validated('points')],
-        );
+        $rankScores = $request->validated('rank_scores');
+
+        if ($rankScores === null) {
+            $rankScores = [[
+                'rank' => $request->validated('rank'),
+                'points' => $request->validated('points'),
+            ]];
+        }
+
+        DB::transaction(function () use ($competition, $rankScores): void {
+            foreach ($rankScores as $rankScore) {
+                $competition->rankScores()->updateOrCreate(
+                    ['rank' => $rankScore['rank']],
+                    ['points' => $rankScore['points']],
+                );
+            }
+        });
 
         return to_route('events.categories.competitions.show', [
             $event,
             $category,
             $competition,
-        ])->with('status', 'Rank scoring saved successfully.');
+        ])->with('status', count($rankScores) === 1 ? 'Rank scoring saved successfully.' : 'Rank scores saved successfully.');
     }
 
     public function updateParticipationPoints(
