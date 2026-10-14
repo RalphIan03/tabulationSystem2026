@@ -46,7 +46,7 @@
                 </a>
 
                 @if (auth()->user()->isAdmin())
-                    <form method="POST" action="{{ route('events.leaderboard-freeze', $event) }}">
+                    <form method="POST" action="{{ route('events.leaderboard-freeze', $event, false) }}">
                         @csrf
                         @method('PATCH')
                         <button type="submit" @class([
@@ -62,7 +62,7 @@
                         </button>
                     </form>
 
-                    <form method="POST" action="{{ route('events.destroy', $event) }}" data-loading-text="Deleting event…" onsubmit="return confirm('Delete this event? All event data will be permanently removed.')">
+                    <form method="POST" action="{{ route('events.destroy', $event, false) }}" data-loading-text="Deleting event…" onsubmit="return confirm('Delete this event? All event data will be permanently removed.')">
                         @csrf
                         @method('DELETE')
                         <button type="submit" class="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/30 bg-maroon-950/30 px-5 text-sm font-semibold text-white transition hover:border-red-200 hover:bg-red-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/30">
@@ -88,7 +88,7 @@
                     </button>
                 </div>
 
-                <form method="POST" action="{{ route('events.details.update', $event) }}" class="space-y-4 p-6" data-loading-text="Updating event details…">
+                <form method="POST" action="{{ route('events.details.update', $event, false) }}" class="space-y-4 p-6" data-loading-text="Updating event details…">
                     @csrf
                     @method('PATCH')
                     <input type="hidden" name="_form" value="event_details">
@@ -131,7 +131,7 @@
             <p class="mt-1 text-sm text-slate-500">Choose how positions continue after tied scores or wins. This applies to every contest and its leaderboard points.</p>
         </div>
         @if ($canEditTieRanking)
-        <form method="POST" action="{{ route('events.tie-ranking.update', $event) }}" class="p-5 sm:p-6" data-loading-text="Saving tie ranking rule…">
+        <form method="POST" action="{{ route('events.tie-ranking.update', $event, false) }}" class="p-5 sm:p-6" data-loading-text="Saving tie ranking rule…">
             @csrf
             @method('PATCH')
             <fieldset class="grid gap-3 lg:grid-cols-2">
@@ -172,7 +172,7 @@
                 </div>
             </div>
 
-            <form method="POST" action="{{ route('events.participants.store', $event) }}" enctype="multipart/form-data" class="space-y-3 border-b border-slate-200 bg-slate-50/70 p-5">
+            <form method="POST" action="{{ route('events.participants.store', $event, false) }}" enctype="multipart/form-data" class="space-y-3 border-b border-slate-200 bg-slate-50/70 p-5">
                 @csrf
                 <div>
                     <label for="participant_name" class="mb-1.5 block text-xs font-semibold text-slate-600">Participant name</label>
@@ -209,7 +209,7 @@
                             </div>
 
                             @if (! in_array($participant->id, $lockedParticipantIds, true))
-                            <form method="POST" action="{{ route('events.participants.destroy', [$event, $participant]) }}" onsubmit="return confirm('Delete this participant? This action cannot be undone.')">
+                            <form method="POST" action="{{ route('events.participants.destroy', [$event, $participant], false) }}" onsubmit="return confirm('Delete this participant? This action cannot be undone.')">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-700" aria-label="Delete {{ $participant->name }}">
@@ -229,7 +229,7 @@
                                 Edit participant
                             </summary>
 
-                            <form method="POST" action="{{ route('events.participants.update', [$event, $participant]) }}" enctype="multipart/form-data" class="mt-3 space-y-3 rounded-xl bg-slate-50 p-4">
+                            <form method="POST" action="{{ route('events.participants.update', [$event, $participant], false) }}" enctype="multipart/form-data" class="mt-3 space-y-3 rounded-xl bg-slate-50 p-4">
                                 @csrf
                                 @method('PATCH')
 
@@ -272,7 +272,7 @@
                 </div>
             </div>
 
-            <form method="POST" action="{{ route('events.categories.store', $event) }}" class="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/70 p-5 sm:flex-row">
+            <form method="POST" action="{{ route('events.categories.store', $event, false) }}" class="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/70 p-5 sm:flex-row">
                 @csrf
                 <div class="min-w-0 flex-1">
                     <label for="category_name" class="sr-only">Category name</label>
@@ -306,7 +306,7 @@
                 <a href="{{ route('events.leaderboard', $event) }}" class="inline-flex h-10 items-center justify-center rounded-xl border border-maroon-200 bg-maroon-50 px-4 text-sm font-semibold text-maroon-700 transition hover:bg-maroon-100">View current leaderboard</a>
 
                 @if (auth()->user()->isAdmin() && $event->categories->contains(fn ($category) => $category->competitions->isNotEmpty()))
-                    <form id="reset-contest-scores-form" method="POST" action="{{ route('events.competition-scores.reset', $event) }}" class="flex flex-col gap-2 sm:flex-row" data-loading-text="Resetting contest scores…">
+                    <form id="reset-contest-scores-form" method="POST" action="{{ route('events.competition-scores.reset', $event, false) }}" class="flex flex-col gap-2 sm:flex-row" data-loading-text="Resetting contest scores…">
                         @csrf
                         @method('PATCH')
                         <button type="submit" name="reset_scope" value="selected" onclick="return confirm('Reset scores for the selected contests? Score entries and finalization will be cleared, but contest configuration will be preserved.')" class="h-10 rounded-xl border border-amber-300 bg-amber-50 px-4 text-sm font-semibold text-amber-800 transition hover:bg-amber-100">Reset selected</button>
@@ -368,7 +368,7 @@
                                     <a href="{{ route('events.categories.competitions.show', [$event, $category, $competition]) }}" class="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Configure</a>
                                     <a href="{{ route('events.categories.competitions.scores.edit', [$event, $category, $competition]) }}" class="inline-flex h-10 items-center justify-center rounded-lg bg-maroon-700 text-sm font-semibold text-white transition hover:bg-maroon-800">Enter scores</a>
                                     @if (auth()->user()->isAdmin())
-                                        <form method="POST" action="{{ route('events.categories.competitions.destroy', [$event, $category, $competition]) }}" class="col-span-2" data-loading-text="Deleting contest…" onsubmit="return confirm('Delete this contest? Its configuration and scores will be permanently removed.')">
+                                        <form method="POST" action="{{ route('events.categories.competitions.destroy', [$event, $category, $competition], false) }}" class="col-span-2" data-loading-text="Deleting contest…" onsubmit="return confirm('Delete this contest? Its configuration and scores will be permanently removed.')">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="h-10 w-full rounded-lg border border-red-200 bg-red-50 text-sm font-semibold text-red-700 transition hover:bg-red-100">Delete contest</button>
@@ -394,7 +394,7 @@
                                 </button>
                             </div>
 
-                            <form method="POST" action="{{ route('events.categories.competitions.store', [$event, $category]) }}" class="space-y-5 p-6" data-loading-text="Creating contest…" data-contest-form>
+                            <form method="POST" action="{{ route('events.categories.competitions.store', [$event, $category], false) }}" class="space-y-5 p-6" data-loading-text="Creating contest…" data-contest-form>
                                 @csrf
                                 <input type="hidden" name="_form" value="add_contest">
                                 <input type="hidden" name="category_id" value="{{ $category->id }}">

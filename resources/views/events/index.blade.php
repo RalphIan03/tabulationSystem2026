@@ -89,7 +89,7 @@
                         </a>
 
                         @if (auth()->user()->isAdmin())
-                        <form method="POST" action="{{ route('events.destroy', $event) }}" data-loading-text="Deleting event…" onsubmit="return confirm('Delete this event? All participants, categories, contests, and scoring configurations will be permanently removed.')">
+                        <form method="POST" action="{{ route('events.destroy', $event, false) }}" data-loading-text="Deleting event…" onsubmit="return confirm('Delete this event? All participants, categories, contests, and scoring configurations will be permanently removed.')">
                             @csrf
                             @method('DELETE')
                             <button type="submit" class="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-red-600/15">
@@ -108,7 +108,7 @@
 
     @if (auth()->user()->isAdmin())
     <dialog id="event-dialog" class="m-auto w-[calc(100%-2rem)] max-w-xl rounded-2xl bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-950/70">
-        <form method="POST" action="{{ route('events.store') }}">
+        <form method="POST" action="{{ route('events.store', [], false) }}">
             @csrf
             <input type="hidden" name="_form" value="event">
 

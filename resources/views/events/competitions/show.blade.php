@@ -25,7 +25,7 @@
                 <a href="{{ route('events.show', $event) }}" class="inline-flex h-10 items-center justify-center rounded-xl border border-white/25 px-4 text-sm font-semibold text-white transition hover:bg-white/10">Back to event</a>
                 <a href="{{ route('events.categories.competitions.scores.edit', [$event, $category, $competition]) }}" class="inline-flex h-10 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-maroon-800 transition hover:bg-maroon-50">Enter scores</a>
                 @if (auth()->user()->isAdmin())
-                    <form method="POST" action="{{ route('events.categories.competitions.destroy', [$event, $category, $competition]) }}" data-loading-text="Deleting contest…" onsubmit="return confirm('Delete this contest? Its configuration and scores will be permanently removed.')">
+                    <form method="POST" action="{{ route('events.categories.competitions.destroy', [$event, $category, $competition], false) }}" data-loading-text="Deleting contest…" onsubmit="return confirm('Delete this contest? Its configuration and scores will be permanently removed.')">
                         @csrf
                         @method('DELETE')
                         <button type="submit" class="h-10 rounded-xl border border-red-200/60 bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700">Delete contest</button>
@@ -46,7 +46,7 @@
         </div>
 
         @if ($canEditConfiguration)
-        <form method="POST" action="{{ route('events.categories.competitions.scoring-method.update', [$event, $category, $competition]) }}" class="p-5">
+        <form method="POST" action="{{ route('events.categories.competitions.scoring-method.update', [$event, $category, $competition], false) }}" class="p-5">
             @csrf
             @method('PATCH')
 
@@ -101,7 +101,7 @@
                 <p class="text-sm font-semibold text-slate-900">Number of judges</p>
                 <p class="mt-1 text-xs leading-5 text-slate-500">Each judge scores every criterion. The final criterion score is the average of all judges, and these averages are added for the contest total.</p>
                 @if ($canEditConfiguration && ! $judgeCountLocked)
-                    <form method="POST" action="{{ route('events.categories.competitions.judge-count.update', [$event, $category, $competition]) }}" data-loading-text="Saving judge count…" class="mt-3 flex flex-wrap items-end gap-3">
+                    <form method="POST" action="{{ route('events.categories.competitions.judge-count.update', [$event, $category, $competition], false) }}" data-loading-text="Saving judge count…" class="mt-3 flex flex-wrap items-end gap-3">
                         @csrf
                         @method('PATCH')
                         <div>
@@ -125,7 +125,7 @@
                     ? old('criteria')
                     : [['name' => '', 'max_score' => 100]];
             @endphp
-            <form method="POST" action="{{ route('events.categories.competitions.criteria.store', [$event, $category, $competition]) }}" class="border-b border-slate-200 bg-slate-50/70 p-5" data-criteria-form data-loading-text="Saving criteria…">
+            <form method="POST" action="{{ route('events.categories.competitions.criteria.store', [$event, $category, $competition], false) }}" class="border-b border-slate-200 bg-slate-50/70 p-5" data-criteria-form data-loading-text="Saving criteria…">
                 @csrf
                 <p class="text-sm font-semibold text-slate-900">Add judging criteria</p>
                 <p class="mt-1 text-xs text-slate-500">Add the fields you need, then save them together.</p>
@@ -175,7 +175,7 @@
                             <p class="mt-0.5 text-xs text-slate-400">Maximum score: {{ number_format((float) $criterion->max_score, 2) }}</p>
                         </div>
                         @if ($canEditConfiguration)
-                        <form method="POST" action="{{ route('events.categories.competitions.criteria.destroy', [$event, $category, $competition, $criterion]) }}" onsubmit="return confirm('Delete this criterion?')">
+                        <form method="POST" action="{{ route('events.categories.competitions.criteria.destroy', [$event, $category, $competition, $criterion], false) }}" onsubmit="return confirm('Delete this criterion?')">
                             @csrf
                             @method('DELETE')
                             <button type="submit" class="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-700" aria-label="Delete {{ $criterion->name }}">
@@ -220,7 +220,7 @@
             </div>
 
             @if ($canEditConfiguration)
-            <form method="POST" action="{{ route('events.categories.competitions.rank-scores.store', [$event, $category, $competition]) }}" class="grid gap-3 border-b border-slate-200 bg-slate-50/70 p-5 sm:grid-cols-[8rem_1fr_auto]">
+            <form method="POST" action="{{ route('events.categories.competitions.rank-scores.store', [$event, $category, $competition], false) }}" class="grid gap-3 border-b border-slate-200 bg-slate-50/70 p-5 sm:grid-cols-[8rem_1fr_auto]">
                 @csrf
                 <div>
                     <label for="rank" class="sr-only">Rank</label>
@@ -238,7 +238,7 @@
             @endif
 
             @if ($canEditConfiguration)
-            <form method="POST" action="{{ route('events.categories.competitions.participation-points.update', [$event, $category, $competition]) }}" class="border-b border-slate-200 bg-maroon-50/50 p-5">
+            <form method="POST" action="{{ route('events.categories.competitions.participation-points.update', [$event, $category, $competition], false) }}" class="border-b border-slate-200 bg-maroon-50/50 p-5">
                 @csrf
                 @method('PATCH')
                 <div class="flex flex-col gap-4 sm:flex-row sm:items-end">
@@ -277,7 +277,7 @@
                                     <td class="px-6 py-4 text-slate-600">{{ number_format((float) $rankScore->points, 2) }}</td>
                                     <td class="px-6 py-4 text-right">
                                         @if ($canEditConfiguration)
-                                        <form method="POST" action="{{ route('events.categories.competitions.rank-scores.destroy', [$event, $category, $competition, $rankScore]) }}" onsubmit="return confirm('Remove scoring for this rank?')">
+                                        <form method="POST" action="{{ route('events.categories.competitions.rank-scores.destroy', [$event, $category, $competition, $rankScore], false) }}" onsubmit="return confirm('Remove scoring for this rank?')">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="text-xs font-semibold text-red-600 hover:text-red-800">Remove</button>

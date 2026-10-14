@@ -113,7 +113,7 @@
                                         Edit
                                     </button>
 
-                                    <form method="POST" action="{{ route('users.toggle-status', $account) }}" onsubmit="return confirm('{{ $account->is_active ? 'Deactivate' : 'Activate' }} this account?')">
+                                    <form method="POST" action="{{ route('users.toggle-status', $account, false) }}" onsubmit="return confirm('{{ $account->is_active ? 'Deactivate' : 'Activate' }} this account?')">
                                         @csrf
                                         @method('PATCH')
                                         <button type="submit" @disabled($account->is(auth()->user()) && $account->is_active) @class([
@@ -152,7 +152,7 @@
                 </button>
             </div>
 
-            <form method="POST" action="{{ route('users.store') }}" class="space-y-4 p-6">
+            <form method="POST" action="{{ route('users.store', [], false) }}" class="space-y-4 p-6">
                 @csrf
                 <input type="hidden" name="form_context" value="create_user">
 
@@ -233,7 +233,7 @@
                     </button>
                 </div>
 
-                <form method="POST" action="{{ route('users.update', $account) }}" class="space-y-4 p-6">
+                <form method="POST" action="{{ route('users.update', $account, false) }}" class="space-y-4 p-6">
                     @csrf
                     @method('PATCH')
                     <input type="hidden" name="form_context" value="{{ $editContext }}">

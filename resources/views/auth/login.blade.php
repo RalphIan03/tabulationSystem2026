@@ -84,7 +84,7 @@
                         <p class="mt-3 text-sm leading-6 text-slate-500">Enter the account details provided by your administrator.</p>
                     </div>
 
-                    <form method="POST" action="{{ route('login.store') }}" class="space-y-5">
+                    <form method="POST" action="{{ route('login.store', [], false) }}" class="space-y-5">
                         @csrf
 
                         <div>

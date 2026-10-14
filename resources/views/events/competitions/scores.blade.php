@@ -55,7 +55,7 @@
             <h3 class="font-semibold text-slate-950">Score with Excel</h3>
             <p class="mt-1 text-sm text-slate-500">Download the scoring template, fill the score cells and entry status, then import it here. Import replaces this contest's current base scores; review existing deductions afterward. Do not change participant, judge, or criterion columns.</p>
             @if ($canEditScores)
-                <form method="POST" enctype="multipart/form-data" action="{{ route('events.categories.competitions.scores.import', [$event, $category, $competition]) }}" class="mt-4 flex flex-wrap items-end gap-3" data-loading-text="Importing Excel scores…">
+                <form method="POST" enctype="multipart/form-data" action="{{ route('events.categories.competitions.scores.import', [$event, $category, $competition], false) }}" class="mt-4 flex flex-wrap items-end gap-3" data-loading-text="Importing Excel scores…">
                     @csrf
                     <label class="grid gap-1 text-sm font-semibold text-slate-700">Scored workbook (.xlsx)
                         <input type="file" name="score_file" accept=".xlsx" required class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-maroon-50 file:px-3 file:py-2 file:font-semibold file:text-maroon-700">
@@ -97,7 +97,7 @@
         </div>
 
         @if (! $scoresAreFinalized || $isAdmin)
-            <form method="POST" action="{{ route('events.categories.competitions.scores.finalization.update', [$event, $category, $competition]) }}" data-loading-text="{{ $scoresAreFinalized ? 'Reopening scores…' : 'Finalizing scores…' }}" @if ($scoresAreFinalized) onsubmit="return confirm('Reopen this score sheet for auditors?')" @else onsubmit="return confirm('Finalize these scores? Auditor editing will be locked, while administrators will retain override access.')" @endif>
+            <form method="POST" action="{{ route('events.categories.competitions.scores.finalization.update', [$event, $category, $competition], false) }}" data-loading-text="{{ $scoresAreFinalized ? 'Reopening scores…' : 'Finalizing scores…' }}" @if ($scoresAreFinalized) onsubmit="return confirm('Reopen this score sheet for auditors?')" @else onsubmit="return confirm('Finalize these scores? Auditor editing will be locked, while administrators will retain override access.')" @endif>
                 @csrf
                 @method('PATCH')
                 <button type="submit" @class([
@@ -134,13 +134,13 @@
         @endphp
 
         @if ($canEditScores && $hasSavedScores)
-            <form id="deduction-form" method="POST" action="{{ route('events.categories.competitions.deductions.update', [$event, $category, $competition]) }}" class="hidden" data-loading-text="Saving deductions…">
+            <form id="deduction-form" method="POST" action="{{ route('events.categories.competitions.deductions.update', [$event, $category, $competition], false) }}" class="hidden" data-loading-text="Saving deductions…">
                 @csrf
                 @method('PATCH')
             </form>
         @endif
 
-        <form method="POST" action="{{ route('events.categories.competitions.scores.update', [$event, $category, $competition]) }}" class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" data-loading-text="Saving participant scores…">
+        <form method="POST" action="{{ route('events.categories.competitions.scores.update', [$event, $category, $competition], false) }}" class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" data-loading-text="Saving participant scores…">
             @csrf
             @method('PATCH')
 

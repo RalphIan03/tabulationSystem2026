@@ -22,7 +22,7 @@
     </section>
 
     <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <form method="GET" action="{{ route('logs.index') }}" class="grid gap-4 lg:grid-cols-[minmax(16rem,1fr)_13rem_10rem_auto] lg:items-end">
+        <form method="GET" action="{{ route('logs.index', [], false) }}" class="grid gap-4 lg:grid-cols-[minmax(16rem,1fr)_13rem_10rem_auto] lg:items-end">
             <div>
                 <label for="log-search" class="mb-1.5 block text-sm font-semibold text-slate-700">Search logs</label>
                 <div class="relative">

@@ -115,7 +115,7 @@
                         </span>
                     </div>
 
-                    <form method="POST" action="{{ route('logout') }}">
+                    <form method="POST" action="{{ route('logout', [], false) }}">
                         @csrf
                         <button type="submit" title="Sign out" class="admin-sidebar-link flex w-full items-center justify-center gap-2 rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-300 transition hover:border-slate-600 hover:bg-slate-900 hover:text-white">
                             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -141,7 +141,7 @@
                                 <span class="block text-xs text-slate-500">{{ auth()->user()->role->label() }}</span>
                             </span>
 
-                            <form method="POST" action="{{ route('logout') }}" class="lg:hidden">
+                            <form method="POST" action="{{ route('logout', [], false) }}" class="lg:hidden">
                                 @csrf
                                 <button type="submit" class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Sign out</button>
                             </form>
