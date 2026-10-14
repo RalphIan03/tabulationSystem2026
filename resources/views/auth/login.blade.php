@@ -62,7 +62,7 @@
                         <!-- <img src="{{asset('images/pgits_logo.png')}}" alt=""> -->
                     </div>
                     <div>
-                        <p class="relative text-sm text-maroon-200/70">Developed and Maintained by PGITS | Programmers Guild of Information Technology Students ©</p>
+                        <p class="relative text-sm text-maroon-200/70">Developed and Maintained by PGITS Officers | Programmers Guild of Information Technology Students ©</p>
                     </div>
                 </div>
             </div>
