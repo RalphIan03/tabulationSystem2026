@@ -23,7 +23,7 @@
 
                 <div>
                     <label for="account_name" class="mb-1.5 block text-sm font-semibold text-slate-700">Full name</label>
-                    <input id="account_name" name="name" type="text" value="{{ old('name', $account->name) }}" maxlength="255" autocomplete="name" required class="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                    <input id="account_name" name="name" type="text" value="{{ old('name', $account->name) }}" maxlength="255" autocomplete="name" required class="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10" readonly>
                     @error('name')<p class="mt-1.5 text-sm text-red-600">{{ $message }}</p>@enderror
                 </div>
 
