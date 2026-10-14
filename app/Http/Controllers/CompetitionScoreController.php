@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ImportCompetitionScoresRequest;
 use App\Http\Requests\ResetCompetitionScoresRequest;
 use App\Http\Requests\UpdateCompetitionDeductionsRequest;
 use App\Http\Requests\UpdateCompetitionFinalizationRequest;
@@ -13,8 +14,10 @@ use App\Models\Competition;
 use App\Models\Event;
 use App\Services\CompetitionManager;
 use App\Services\CompetitionScoreManager;
+use App\Services\CompetitionScoreWorkbook;
 use App\Services\LeaderboardCalculator;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
 
 final class CompetitionScoreController extends Controller
@@ -23,6 +26,7 @@ final class CompetitionScoreController extends Controller
         private readonly CompetitionScoreManager $scoreManager,
         private readonly CompetitionManager $competitionManager,
         private readonly LeaderboardCalculator $leaderboard,
+        private readonly CompetitionScoreWorkbook $workbook,
     ) {}
 
     public function edit(
@@ -46,7 +50,33 @@ final class CompetitionScoreController extends Controller
             'competition' => $competition,
             'resultsByParticipant' => $competition->results->keyBy('participant_id'),
             'standings' => $this->leaderboard->competitionStandings($competition, $event),
+            'criterionStandings' => $this->leaderboard->criterionStandings($competition, $event),
         ]);
+    }
+
+    public function template(Event $event, Category $category, Competition $competition): Response
+    {
+        abort_unless($competition->usesCriteriaScoring(), 404);
+
+        return response($this->workbook->export($event, $competition), 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="scoring-template-'.$competition->getKey().'.xlsx"',
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    public function import(
+        ImportCompetitionScoresRequest $request,
+        Event $event,
+        Category $category,
+        Competition $competition,
+    ): RedirectResponse {
+        $scores = $this->workbook->import($request->file('score_file')->getRealPath(), $event, $competition);
+        $this->scoreManager->save($competition, $event->participants, $scores);
+
+        return to_route('events.categories.competitions.scores.edit', [$event, $category, $competition])
+            ->with('status', 'Excel scores imported successfully. Review and finalize the contest when ready.');
     }
 
     public function update(

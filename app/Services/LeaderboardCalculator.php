@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Enums\TieRankingMethod;
 use App\Models\Competition;
+use App\Models\Criterion;
 use App\Models\Event;
 use App\Models\Participant;
 use Illuminate\Support\Collection;
@@ -96,6 +97,52 @@ final class LeaderboardCalculator
             $previousScore = $row['raw_score'];
 
             return $row;
+        });
+    }
+
+    /** @return Collection<int, array{criterion: Criterion, standings: Collection<int, array{participant: Participant, score: float, rank: int}>}> */
+    public function criterionStandings(Competition $competition, Event $event): Collection
+    {
+        if (! $competition->usesCriteriaScoring()) {
+            return collect();
+        }
+
+        $competition->loadMissing(['criteria', 'results.participant', 'results.criterionScores']);
+
+        return $competition->criteria->sortBy('name')->values()->map(function ($criterion) use ($competition, $event): array {
+            $rows = $competition->results
+                ->filter(static fn ($result): bool => $result->has_entry)
+                ->map(function ($result) use ($competition, $criterion): ?array {
+                    $average = $result->criteriaScoreSummary($competition)['averages'][$criterion->getKey()] ?? null;
+
+                    return $average === null ? null : [
+                        'participant' => $result->participant,
+                        'score' => $average,
+                        'rank' => 0,
+                    ];
+                })
+                ->filter()
+                ->sort(static fn (array $left, array $right): int => ($right['score'] <=> $left['score'])
+                    ?: strcasecmp($left['participant']->name, $right['participant']->name))
+                ->values();
+            $previousScore = null;
+            $rank = 0;
+
+            return [
+                'criterion' => $criterion,
+                'standings' => $rows->map(function (array $row, int $index) use ($event, &$previousScore, &$rank): array {
+                    if ($previousScore === null || abs($row['score'] - $previousScore) > 0.00001) {
+                        $rank = $event->tie_ranking_method === TieRankingMethod::SkipPositions
+                            ? $index + 1
+                            : $rank + 1;
+                    }
+
+                    $row['rank'] = $rank;
+                    $previousScore = $row['score'];
+
+                    return $row;
+                }),
+            ];
         });
     }
 

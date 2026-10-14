@@ -116,6 +116,18 @@ final class CompetitionScoreExporter
                 : (strcasecmp($left['participant'], $right['participant']) ?: strcmp($left['participant'], $right['participant']));
         });
 
+        $criterionRanks = $usesCriteria
+            ? $this->leaderboard->criterionStandings($competition, $event)
+                ->map(static fn (array $breakdown): array => [
+                    'name' => $breakdown['criterion']->name,
+                    'rows' => $breakdown['standings']->map(static fn (array $row): array => [
+                        'rank' => $row['rank'],
+                        'participant' => $row['participant']->name,
+                        'score' => $row['score'],
+                    ])->all(),
+                ])->all()
+            : [];
+
         return [
             'event' => $event->name,
             'category' => $category->name,
@@ -123,10 +135,13 @@ final class CompetitionScoreExporter
             'scoring_method' => $competition->scoring_method->label(),
             'judge_count' => $competition->judge_count,
             'uses_criteria' => $usesCriteria,
-            'status' => $competition->scoresAreFinalized() ? 'Finalized' : 'In progress',
+            'status' => $competition->scoresAreFinalized()
+                ? 'Finalized'
+                : ($competition->hasSavedScores() ? 'Pending finalization' : 'Not started'),
             'exported_at' => now()->format('Y-m-d H:i:s'),
             'criteria' => $criteria,
             'rows' => $rows,
+            'criterion_ranks' => $criterionRanks,
         ];
     }
 
@@ -140,6 +155,11 @@ final class CompetitionScoreExporter
 
     /** @param array<string, mixed> $report */
     public function xlsx(array $report): string
+    {
+        return $this->xlsxWorksheet($this->worksheet($report));
+    }
+
+    public function xlsxWorksheet(string $worksheet): string
     {
         if (! class_exists(ZipArchive::class)) {
             throw new RuntimeException('The PHP ZIP extension is required for Excel exports.');
@@ -177,7 +197,7 @@ final class CompetitionScoreExporter
                 .'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
                 .'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
                 .'</Relationships>');
-            $archive->addFromString('xl/worksheets/sheet1.xml', $this->worksheet($report));
+            $archive->addFromString('xl/worksheets/sheet1.xml', $worksheet);
             $archive->close();
 
             $content = file_get_contents($temporaryPath);
@@ -267,6 +287,21 @@ final class CompetitionScoreExporter
 
                     $values[] = $row['judge_totals'][$judge];
                     $sheetRows[$nextRow++] = $values;
+                }
+
+                $nextRow++;
+            }
+
+            foreach ($report['criterion_ranks'] as $criterionRank) {
+                if ($criterionRank['rows'] === []) {
+                    continue;
+                }
+
+                $sheetRows[$nextRow++] = ['Best on '.$criterionRank['name']];
+                $sheetRows[$nextRow++] = ['Rank', 'Participant', 'Average score'];
+
+                foreach ($criterionRank['rows'] as $rankedRow) {
+                    $sheetRows[$nextRow++] = [$rankedRow['rank'], $rankedRow['participant'], $rankedRow['score']];
                 }
 
                 $nextRow++;
@@ -406,6 +441,64 @@ final class CompetitionScoreExporter
 
                 $hasTableOnPage = true;
             }
+        }
+
+        foreach ($report['criterion_ranks'] as $criterionRank) {
+            if ($criterionRank['rows'] === []) {
+                continue;
+            }
+
+            $widths = [70.0, 502.0, 210.0];
+            $headerCells = $this->pdfCellLines(['Rank', 'Participant', 'Average score'], $widths);
+            $headerHeight = $this->pdfRowHeight($headerCells);
+            $preparedRows = [];
+            $tableHeight = 26 + $headerHeight;
+
+            foreach ($criterionRank['rows'] as $index => $rankedRow) {
+                $cells = $this->pdfCellLines([
+                    (string) $rankedRow['rank'],
+                    $rankedRow['participant'],
+                    $this->formattedNumber($rankedRow['score']),
+                ], $widths);
+                $height = $this->pdfRowHeight($cells);
+                $preparedRows[] = ['cells' => $cells, 'height' => $height, 'index' => $index];
+                $tableHeight += $height;
+            }
+
+            $gap = $hasTableOnPage ? 16 : 0;
+
+            if ($hasTableOnPage && $cursor - $gap - $tableHeight < 38
+                && ($tableHeight <= $pageStartCursor - 38
+                    || $cursor - $gap - 26 - $headerHeight - $preparedRows[0]['height'] < 38)) {
+                $pages[] = $content;
+                [$content, $cursor] = $this->pdfPageHeader($report);
+                $hasTableOnPage = false;
+            }
+
+            if ($hasTableOnPage) {
+                $cursor -= 16;
+            }
+
+            $content .= $this->pdfDrawText($this->pdfText('Best on '.$criterionRank['name']), 30, $cursor - 2, 10, true);
+            $cursor -= 26;
+            $content .= $this->pdfTableRow($headerCells, $widths, $cursor, $headerHeight, true);
+            $cursor -= $headerHeight;
+
+            foreach ($preparedRows as $row) {
+                if ($cursor - $row['height'] < 38) {
+                    $pages[] = $content;
+                    [$content, $cursor] = $this->pdfPageHeader($report);
+                    $content .= $this->pdfDrawText($this->pdfText('Best on '.$criterionRank['name']), 30, $cursor - 2, 10, true);
+                    $cursor -= 26;
+                    $content .= $this->pdfTableRow($headerCells, $widths, $cursor, $headerHeight, true);
+                    $cursor -= $headerHeight;
+                }
+
+                $content .= $this->pdfTableRow($row['cells'], $widths, $cursor, $row['height'], false, $row['index'] % 2 === 1);
+                $cursor -= $row['height'];
+            }
+
+            $hasTableOnPage = true;
         }
 
         $pages[] = $content;

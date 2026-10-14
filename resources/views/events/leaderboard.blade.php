@@ -97,9 +97,20 @@
         @endif
     </section>
 
-    <div class="mt-6 space-y-6">
+    <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <h3 class="text-xl font-semibold text-slate-950">Contest standings</h3>
+        <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">Category
+            <select id="contest-category-filter" class="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm focus:border-maroon-600 focus:ring-maroon-600">
+                <option value="all">All categories</option>
+                @foreach ($event->categories as $category)
+                    <option value="{{ $category->id }}">{{ $category->name }}</option>
+                @endforeach
+            </select>
+        </label>
+    </div>
+    <div class="mt-4 space-y-6">
         @forelse ($event->categories as $category)
-            <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <section data-category-card="{{ $category->id }}" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div class="border-b border-slate-200 bg-slate-50 px-6 py-4">
                     <h3 class="text-lg font-semibold text-slate-950">{{ $category->name }}</h3>
                     <p class="mt-1 text-sm text-slate-500">Current scores for {{ $category->competitions->count() }} {{ Str::plural('contest', $category->competitions->count()) }}.</p>
@@ -113,31 +124,22 @@
                                 <div>
                                     <h4 class="font-semibold text-slate-900">{{ $competition->name }}</h4>
                                     <p class="mt-0.5 text-xs text-slate-400">{{ $competition->scoring_method->label() }}</p>
+                                    @if (! $competition->scoresAreFinalized() && $competition->hasSavedScores())
+                                        <span class="mt-2 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">Pending finalization</span>
+                                    @endif
                                 </div>
                                 <a href="{{ route('events.categories.competitions.scores.edit', [$event, $category, $competition]) }}" class="shrink-0 text-xs font-semibold text-maroon-700 hover:text-maroon-900">Enter scores</a>
                             </div>
 
                             @if ($standings->isNotEmpty())
-                                <div class="divide-y divide-slate-100">
-                                    @foreach ($standings as $row)
-                                        <div class="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-3 px-5 py-3">
-                                            <span class="font-bold text-slate-500">#{{ $row['rank'] }}</span>
-                                            <span class="min-w-0">
-                                                <span class="block truncate font-medium text-slate-800">{{ $row['participant']->name }}</span>
-                                                <span class="block text-xs text-slate-400">
-                                                    @if ($row['deduction'] > 0)
-                                                        {{ number_format($row['gross_score'], 2) }} − {{ number_format($row['deduction'], 2) }} deduction = {{ number_format($row['raw_score'], 2) }}
-                                                    @elseif ($competition->usesCriteriaScoring())
-                                                        {{ number_format($row['raw_score'], 2) }} score
-                                                    @else
-                                                        {{ $row['wins'] }} {{ Str::plural('win', $row['wins']) }}
-                                                    @endif
-                                                </span>
-                                            </span>
-                                            <span class="font-semibold text-maroon-700">{{ number_format($row['leaderboard_points'], 2) }} pts</span>
-                                        </div>
-                                    @endforeach
-                                </div>
+                                <div class="overflow-x-auto"><table class="w-full min-w-[440px] text-left text-sm">
+                                    <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-4 py-2">Rank</th><th class="px-4 py-2">Participant</th><th class="px-4 py-2 text-right">{{ $competition->usesCriteriaScoring() ? 'Score' : 'Wins' }}</th><th class="px-4 py-2 text-right">Points</th></tr></thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        @foreach ($standings as $row)
+                                            <tr><td class="px-4 py-3 font-bold text-maroon-700">#{{ $row['rank'] }}</td><td class="px-4 py-3 font-medium text-slate-800">{{ $row['participant']->name }}</td><td class="px-4 py-3 text-right">{{ $competition->usesCriteriaScoring() ? number_format($row['raw_score'], 2) : $row['wins'] }}</td><td class="px-4 py-3 text-right font-semibold">{{ number_format($row['leaderboard_points'], 2) }}</td></tr>
+                                        @endforeach
+                                    </tbody>
+                                </table></div>
                             @else
                                 <p class="px-5 py-8 text-center text-sm text-slate-400">No scores entered.</p>
                             @endif
@@ -154,3 +156,13 @@
         @endforelse
     </div>
 @endsection
+
+@push('scripts')
+    <script>
+        document.getElementById('contest-category-filter')?.addEventListener('change', (event) => {
+            document.querySelectorAll('[data-category-card]').forEach((card) => {
+                card.classList.toggle('hidden', event.target.value !== 'all' && card.dataset.categoryCard !== event.target.value);
+            });
+        });
+    </script>
+@endpush

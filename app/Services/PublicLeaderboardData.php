@@ -13,6 +13,54 @@ final class PublicLeaderboardData
 {
     public function __construct(private readonly LeaderboardCalculator $calculator) {}
 
+    /** @return array{rows: array<int, array<string, float|int|string|null>>, categories: array<int, array<string, mixed>>} */
+    public function snapshot(Event $event, ?int $contestCategoryId = null): array
+    {
+        if ($contestCategoryId !== null) {
+            $event->categories()->findOrFail($contestCategoryId);
+        }
+
+        $event->load([
+            'categories' => fn ($query) => $query->orderBy('name'),
+            'categories.competitions' => fn ($query) => $query->whereNotNull('scores_finalized_at')->orderBy('name'),
+            'categories.competitions.rankScores',
+            'categories.competitions.criteria',
+            'categories.competitions.results' => fn ($query) => $query->where('has_entry', true),
+            'categories.competitions.results.participant',
+            'categories.competitions.results.criterionScores',
+        ]);
+
+        $rows = $this->calculator->overallStandings($event)
+            ->map(fn (array $row, int $index): array => [
+                'rank' => $index + 1,
+                ...$this->participantColumns($row['participant']),
+                'contest_wins' => $row['contest_wins'],
+                'points' => $row['leaderboard_points'],
+            ])->all();
+        $categories = $event->categories
+            ->when($contestCategoryId !== null, fn ($categories) => $categories->where('id', $contestCategoryId))
+            ->map(fn ($category): array => [
+                'id' => $category->getKey(),
+                'name' => $category->name,
+                'contests' => $category->competitions->map(fn ($competition): array => [
+                    'id' => $competition->getKey(),
+                    'name' => $competition->name,
+                    'method' => $competition->scoring_method->value,
+                    'rows' => $this->calculator->competitionStandings($competition, $event)
+                        ->map(fn (array $row): array => [
+                            'rank' => $row['rank'],
+                            ...$this->participantColumns($row['participant']),
+                            'result' => $competition->usesCriteriaScoring()
+                                ? number_format($row['raw_score'], 2, '.', '')
+                                : $row['wins'].' '.Str::plural('win', $row['wins']),
+                            'points' => $row['leaderboard_points'],
+                        ])->all(),
+                ])->all(),
+            ])->values()->all();
+
+        return compact('rows', 'categories');
+    }
+
     /** @return list<array<string, float|int|string|null>> */
     public function rows(Event $event, string $scope, ?int $categoryId, ?int $competitionId): array
     {

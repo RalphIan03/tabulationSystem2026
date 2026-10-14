@@ -45,6 +45,25 @@ final class Competition extends Model
         return $this->scores_finalized_at !== null;
     }
 
+    public function hasSavedScores(): bool
+    {
+        if (array_key_exists('has_saved_scores', $this->attributes)) {
+            return (bool) $this->attributes['has_saved_scores'];
+        }
+
+        if ($this->relationLoaded('results')) {
+            return $this->results->contains(fn (CompetitionResult $result): bool => $result->has_entry
+                && ($this->usesCriteriaScoring() ? $result->criterionScores->isNotEmpty() : $result->wins !== null));
+        }
+
+        return $this->results()
+            ->where('has_entry', true)
+            ->when($this->usesCriteriaScoring(),
+                fn ($query) => $query->whereHas('criterionScores'),
+                fn ($query) => $query->whereNotNull('wins'))
+            ->exists();
+    }
+
     public function canBeConfiguredBy(?User $user): bool
     {
         return $user !== null

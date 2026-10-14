@@ -356,6 +356,8 @@
                                         <span class="rounded-full bg-maroon-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-maroon-700">{{ $competition->scoring_method->label() }}</span>
                                         @if ($competition->scoresAreFinalized())
                                             <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">Scores finalized</span>
+                                        @elseif ($competition->hasSavedScores())
+                                            <span class="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-800">Pending finalization</span>
                                         @endif
                                     </span>
                                 </div>

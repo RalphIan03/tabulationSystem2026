@@ -67,7 +67,7 @@ final class PublicLeaderboardTest extends TestCase
     {
         $event = Event::factory()->create(['name' => 'University Games']);
         $category = $event->categories()->create(['name' => 'Sports']);
-        $category->competitions()->create(['name' => 'Basketball']);
+        $category->competitions()->create(['name' => 'Basketball', 'scores_finalized_at' => now()]);
 
         $this->get(route('leaderboards.show', $event))
             ->assertOk()
@@ -173,6 +173,71 @@ final class PublicLeaderboardTest extends TestCase
         $this->getJson(route('leaderboards.data', [$event, 'scope' => 'game', 'competition_id' => $pending->id]))
             ->assertOk()
             ->assertJsonCount(0, 'rows');
+    }
+
+    public function test_public_page_places_overall_table_before_category_grouped_contest_cards(): void
+    {
+        $event = Event::factory()->create();
+        $participant = $event->participants()->create(['name' => 'Alex Santos']);
+        $sports = $event->categories()->create(['name' => 'Sports']);
+        $finalized = $sports->competitions()->create([
+            'name' => 'Basketball',
+            'scoring_method' => CompetitionScoringMethod::Wins,
+            'scores_finalized_at' => now(),
+        ]);
+        $sports->competitions()->create(['name' => 'Volleyball', 'scoring_method' => CompetitionScoringMethod::Wins]);
+        $finalized->results()->create(['participant_id' => $participant->id, 'wins' => 4]);
+
+        $response = $this->get(route('leaderboards.show', $event))->assertOk();
+        $content = $response->getContent();
+        $this->assertLessThan(strpos($content, 'Contests by category'), strpos($content, 'Overall score'));
+        $response->assertSee('Basketball')->assertDontSee('Volleyball')->assertSee('Category filter');
+        $response->assertSee('id="apply-contest-filter"', false)->assertSee('Apply filter');
+
+        $this->getJson(route('leaderboards.data', $event))
+            ->assertOk()
+            ->assertJsonPath('rows.0.name', 'Alex Santos')
+            ->assertJsonPath('categories.0.name', 'Sports')
+            ->assertJsonPath('categories.0.contests.0.name', 'Basketball')
+            ->assertJsonCount(1, 'categories.0.contests');
+    }
+
+    public function test_apply_filter_data_loads_selected_contest_cards_but_keeps_overall_scores(): void
+    {
+        $event = Event::factory()->create();
+        $alex = $event->participants()->create(['name' => 'Alex Santos']);
+        $bea = $event->participants()->create(['name' => 'Bea Cruz']);
+        $sports = $event->categories()->create(['name' => 'Sports']);
+        $arts = $event->categories()->create(['name' => 'Arts']);
+        $basketball = $sports->competitions()->create([
+            'name' => 'Basketball',
+            'scoring_method' => CompetitionScoringMethod::Wins,
+            'scores_finalized_at' => now(),
+        ]);
+        $painting = $arts->competitions()->create([
+            'name' => 'Painting',
+            'scoring_method' => CompetitionScoringMethod::Wins,
+            'scores_finalized_at' => now(),
+        ]);
+        $basketball->results()->create(['participant_id' => $alex->id, 'wins' => 4]);
+        $painting->results()->create(['participant_id' => $bea->id, 'wins' => 3]);
+
+        $this->getJson(route('leaderboards.data', [$event, 'category_id' => $sports->id]))
+            ->assertOk()
+            ->assertJsonCount(2, 'rows')
+            ->assertJsonCount(1, 'categories')
+            ->assertJsonPath('categories.0.name', 'Sports')
+            ->assertJsonPath('categories.0.contests.0.name', 'Basketball')
+            ->assertJsonMissing(['name' => 'Painting'], false);
+
+        $this->getJson(route('leaderboards.data', $event))
+            ->assertOk()
+            ->assertJsonCount(2, 'categories');
+
+        $otherEvent = Event::factory()->create();
+        $otherCategory = $otherEvent->categories()->create(['name' => 'Other']);
+        $this->getJson(route('leaderboards.data', [$event, 'category_id' => $otherCategory->id]))
+            ->assertNotFound();
     }
 
     public function test_category_filter_is_scoped_to_its_finalized_contests(): void

@@ -39,21 +39,24 @@ final class PublicLeaderboardController extends Controller
     private function render(?Event $event): Response
     {
         $initialRows = [];
+        $initialCategories = [];
 
         if ($event !== null) {
             if (! $event->leaderboard_frozen) {
-                $initialRows = $this->leaderboard->rows($event, 'overall', null, null);
+                $snapshot = $this->leaderboard->snapshot($event);
+                $initialRows = $snapshot['rows'];
+                $initialCategories = $snapshot['categories'];
             }
 
-            $event->load([
-                'categories' => fn ($query) => $query->orderBy('name'),
-                'categories.competitions' => fn ($query) => $query->orderBy('name'),
-            ]);
+            if ($event->leaderboard_frozen) {
+                $event->load(['categories' => fn ($query) => $query->orderBy('name')]);
+            }
         }
 
         return response()->view('events.public-leaderboard', [
             'event' => $event,
             'initialRows' => $initialRows,
+            'initialCategories' => $initialCategories,
             'dataUrl' => $event === null ? null : route('leaderboards.data', $event),
         ])->header('Cache-Control', 'no-store, private');
     }
@@ -66,18 +69,25 @@ final class PublicLeaderboardController extends Controller
             'competition_id' => ['required_if:scope,game', 'nullable', 'integer'],
         ]);
 
+        $snapshot = ! $event->leaderboard_frozen && ($filters['scope'] ?? 'overall') === 'overall'
+            ? $this->leaderboard->snapshot(
+                $event,
+                isset($filters['category_id']) ? (int) $filters['category_id'] : null,
+            )
+            : null;
         $rows = $event->leaderboard_frozen
             ? []
-            : $this->leaderboard->rows(
+            : ($snapshot['rows'] ?? $this->leaderboard->rows(
                 $event,
                 $filters['scope'] ?? 'overall',
                 isset($filters['category_id']) ? (int) $filters['category_id'] : null,
                 isset($filters['competition_id']) ? (int) $filters['competition_id'] : null,
-            );
+            ));
 
         return response()->json([
             'frozen' => $event->leaderboard_frozen,
             'rows' => $rows,
+            'categories' => $snapshot['categories'] ?? [],
         ])->header('Cache-Control', 'no-store, private');
     }
 }

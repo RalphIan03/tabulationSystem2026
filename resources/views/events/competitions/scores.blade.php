@@ -33,7 +33,7 @@
                         'rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset',
                         'bg-emerald-400/15 text-emerald-200 ring-emerald-300/20' => $competition->scoresAreFinalized(),
                         'bg-amber-400/15 text-amber-200 ring-amber-300/20' => ! $competition->scoresAreFinalized(),
-                    ])>{{ $competition->scoresAreFinalized() ? 'Scores finalized' : 'Scores in progress' }}</span>
+                    ])>{{ $competition->scoresAreFinalized() ? 'Scores finalized' : ($competition->hasSavedScores() ? 'Pending finalization' : 'Scores not started') }}</span>
                 </div>
                 <h2 class="mt-4 text-3xl font-semibold tracking-tight">Enter participant scores</h2>
                 <p class="mt-3 max-w-2xl text-sm leading-6 text-maroon-100/80">{{ $competition->name }} · {{ $competition->scoring_method->description() }}</p>
@@ -43,9 +43,31 @@
                 <a href="{{ route('events.leaderboard', $event) }}" class="inline-flex h-10 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-maroon-800 transition hover:bg-maroon-50">View leaderboard</a>
                 <a href="{{ route('events.categories.competitions.scores.export', [$event, $category, $competition, 'format' => 'xlsx']) }}" download data-export-download data-loading-text="Exporting Excel…" class="inline-flex h-10 items-center justify-center rounded-xl border border-white/25 px-4 text-sm font-semibold text-white transition hover:bg-white/10">Export Excel</a>
                 <a href="{{ route('events.categories.competitions.scores.export', [$event, $category, $competition, 'format' => 'pdf']) }}" download data-export-download data-loading-text="Exporting PDF…" class="inline-flex h-10 items-center justify-center rounded-xl border border-white/25 px-4 text-sm font-semibold text-white transition hover:bg-white/10">Export PDF</a>
+                @if ($competition->usesCriteriaScoring())
+                    <a href="{{ route('events.categories.competitions.scores.template', [$event, $category, $competition]) }}" download data-export-download data-loading-text="Preparing score template…" class="inline-flex h-10 items-center justify-center rounded-xl border border-white/25 px-4 text-sm font-semibold text-white transition hover:bg-white/10">Download scoring template</a>
+                @endif
             </div>
         </div>
     </section>
+
+    @if ($competition->usesCriteriaScoring() && $competition->criteria->isNotEmpty() && $event->participants->isNotEmpty())
+        <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h3 class="font-semibold text-slate-950">Score with Excel</h3>
+            <p class="mt-1 text-sm text-slate-500">Download the scoring template, fill the score cells and entry status, then import it here. Import replaces this contest's current base scores; review existing deductions afterward. Do not change participant, judge, or criterion columns.</p>
+            @if ($canEditScores)
+                <form method="POST" enctype="multipart/form-data" action="{{ route('events.categories.competitions.scores.import', [$event, $category, $competition]) }}" class="mt-4 flex flex-wrap items-end gap-3" data-loading-text="Importing Excel scores…">
+                    @csrf
+                    <label class="grid gap-1 text-sm font-semibold text-slate-700">Scored workbook (.xlsx)
+                        <input type="file" name="score_file" accept=".xlsx" required class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-maroon-50 file:px-3 file:py-2 file:font-semibold file:text-maroon-700">
+                    </label>
+                    <button type="submit" class="h-10 rounded-xl bg-maroon-700 px-5 text-sm font-semibold text-white hover:bg-maroon-800">Import scores</button>
+                </form>
+                @error('score_file')<p class="mt-2 text-sm font-semibold text-red-700">{{ $message }}</p>@enderror
+            @else
+                <p class="mt-3 text-sm font-semibold text-emerald-700">Imports are locked for auditors after finalization.</p>
+            @endif
+        </section>
+    @endif
 
     <section @class([
         'mt-6 flex flex-col gap-4 rounded-2xl border p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between',
@@ -280,6 +302,32 @@
                 </div>
             @endif
         </form>
+    @endif
+
+    @if ($competition->usesCriteriaScoring() && $criterionStandings->isNotEmpty())
+        <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h3 class="text-lg font-semibold text-slate-950">Best on each criterion</h3>
+            <p class="mt-1 text-sm text-slate-500">Positions use each criterion's average across judges and the event tie rule. Participants without an entry or complete judge scores for a criterion are excluded.</p>
+            <div class="mt-5 grid gap-4 lg:grid-cols-2">
+                @foreach ($criterionStandings as $breakdown)
+                    <article class="overflow-hidden rounded-xl border border-slate-200">
+                        <h4 class="border-b border-slate-200 bg-slate-50 px-4 py-3 font-semibold text-slate-900">{{ $breakdown['criterion']->name }}</h4>
+                        @if ($breakdown['standings']->isNotEmpty())
+                            <table class="w-full text-left text-sm">
+                                <thead class="text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-4 py-2">Rank</th><th class="px-4 py-2">Participant</th><th class="px-4 py-2 text-right">Average</th></tr></thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @foreach ($breakdown['standings'] as $row)
+                                        <tr><td class="px-4 py-3 font-bold text-maroon-700">#{{ $row['rank'] }}</td><td class="px-4 py-3">{{ $row['participant']->name }}</td><td class="px-4 py-3 text-right font-semibold">{{ number_format($row['score'], 2) }}</td></tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        @else
+                            <p class="px-4 py-6 text-sm text-slate-500">No complete scores yet.</p>
+                        @endif
+                    </article>
+                @endforeach
+            </div>
+        </section>
     @endif
 @endsection
 

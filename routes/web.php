@@ -97,6 +97,14 @@ Route::middleware(['auth', 'active'])->group(function (): void {
             '/events/{event}/categories/{category}/competitions/{competition}/scores/export/{format}',
             [CompetitionScoreExportController::class, 'download'],
         )->where('format', 'xlsx|pdf')->name('events.categories.competitions.scores.export');
+        Route::get(
+            '/events/{event}/categories/{category}/competitions/{competition}/scores/template',
+            [CompetitionScoreController::class, 'template'],
+        )->name('events.categories.competitions.scores.template');
+        Route::post(
+            '/events/{event}/categories/{category}/competitions/{competition}/scores/import',
+            [CompetitionScoreController::class, 'import'],
+        )->name('events.categories.competitions.scores.import');
         Route::patch(
             '/events/{event}/categories/{category}/competitions/{competition}/scores',
             [CompetitionScoreController::class, 'update'],

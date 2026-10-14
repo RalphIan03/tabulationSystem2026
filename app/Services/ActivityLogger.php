@@ -31,6 +31,7 @@ final class ActivityLogger
         'events.categories.competitions.scoring-method.update' => 'Changed a contest scoring method',
         'events.categories.competitions.judge-count.update' => 'Changed the number of contest judges',
         'events.categories.competitions.scores.update' => 'Updated participant contest scores',
+        'events.categories.competitions.scores.import' => 'Imported participant contest scores from Excel',
         'events.categories.competitions.deductions.update' => 'Updated participant score deductions',
         'events.categories.competitions.scores.finalization.update' => 'Changed contest score finalization',
         'events.categories.competitions.criteria.store' => 'Added scoring criteria',
@@ -104,6 +105,10 @@ final class ActivityLogger
     {
         if ($routeName === 'login.store') {
             return 'authentication';
+        }
+
+        if ($routeName === 'events.categories.competitions.scores.import') {
+            return 'update';
         }
 
         return match ($request->method()) {

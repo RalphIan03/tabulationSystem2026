@@ -27,33 +27,10 @@
 
         @if ($event)
         <section class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Leaderboard results">
-            <div class="grid gap-4 border-b border-slate-200 p-5 sm:grid-cols-3">
-                <div>
-                    <label for="leaderboard-scope" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">View</label>
-                    <select id="leaderboard-scope" class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus:border-maroon-600 focus:ring-maroon-600">
-                        <option value="overall">Overall</option>
-                        <option value="category">By category</option>
-                        <option value="game">By game</option>
-                    </select>
-                </div>
-                <div id="category-filter" class="hidden">
-                    <label for="leaderboard-category" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Category</label>
-                    <select id="leaderboard-category" class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus:border-maroon-600 focus:ring-maroon-600">
-                        @foreach ($event->categories as $category)
-                            <option value="{{ $category->id }}">{{ $category->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div id="game-filter" class="hidden">
-                    <label for="leaderboard-game" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Game</label>
-                    <select id="leaderboard-game" class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus:border-maroon-600 focus:ring-maroon-600">
-                        @foreach ($event->categories as $category)
-                            @foreach ($category->competitions as $competition)
-                                <option value="{{ $competition->id }}" data-scoring-method="{{ $competition->scoring_method->value }}">{{ $category->name }} · {{ $competition->name }}</option>
-                            @endforeach
-                        @endforeach
-                    </select>
-                </div>
+            <div class="border-b border-slate-200 p-5">
+                <h2 class="text-lg font-semibold text-slate-950">Overall score</h2>
+                <p class="mt-1 text-sm text-slate-500">Contest wins and points from finalized contests across all categories.</p>
+                <input type="hidden" name="scope" value="overall">
             </div>
 
             <div id="frozen-message" @class(['border-b border-amber-200 bg-amber-50 px-6 py-4 text-sm font-semibold text-amber-900', 'hidden' => ! $event->leaderboard_frozen]) role="status">The public ranking table is frozen. Check back later.</div>
@@ -63,7 +40,7 @@
                         <tr>
                             <th scope="col" class="px-6 py-4">Rank</th>
                             <th scope="col" class="px-6 py-4">Participant</th>
-                            <th id="result-heading" scope="col" class="px-6 py-4 text-right">Contest wins</th>
+                            <th scope="col" class="px-6 py-4 text-right">Contest wins</th>
                             <th scope="col" class="px-6 py-4 text-right">Points</th>
                         </tr>
                     </thead>
@@ -93,6 +70,48 @@
                 </table>
             </div>
         </section>
+        <section class="mt-6" aria-label="Contest results">
+            <div class="flex flex-wrap items-end justify-between gap-3">
+                <div><h2 class="text-xl font-semibold text-slate-950">Contests by category</h2><p class="mt-1 text-sm text-slate-500">By category, browse finalized contests. By game, compare participant scores in each table. Choose a category and click Apply filter to load it.</p></div>
+                <form id="contest-filter-form" class="flex flex-wrap items-end gap-3">
+                    <label class="grid gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Category filter
+                        <select id="contest-category-filter" class="h-11 min-w-48 rounded-xl border border-slate-300 bg-white px-3 text-sm normal-case focus:border-maroon-600 focus:ring-maroon-600">
+                            <option value="all">All categories</option>
+                            @foreach ($event->categories as $category)
+                                <option value="{{ $category->id }}">{{ $category->name }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                    <button id="apply-contest-filter" type="submit" class="inline-flex h-11 items-center justify-center rounded-xl bg-maroon-700 px-5 text-sm font-semibold text-white transition hover:bg-maroon-800 focus:outline-none focus-visible:ring-4 focus-visible:ring-maroon-600/20 disabled:cursor-wait disabled:opacity-60">Apply filter</button>
+                </form>
+            </div>
+            <div id="contest-cards" class="mt-4 space-y-6">
+                @foreach ($initialCategories as $category)
+                    @if (count($category['contests']))
+                        <section data-category-card="{{ $category['id'] }}" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                            <h3 class="border-b border-slate-200 bg-slate-50 px-6 py-4 text-lg font-semibold">{{ $category['name'] }}</h3>
+                            <div class="grid gap-5 p-5 xl:grid-cols-2">
+                                @foreach ($category['contests'] as $contest)
+                                    <article class="overflow-hidden rounded-xl border border-slate-200">
+                                        <h4 class="border-b border-slate-200 px-5 py-4 font-semibold">{{ $contest['name'] }}</h4>
+                                        <div class="overflow-x-auto"><table class="w-full min-w-[440px] text-left text-sm">
+                                            <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-4 py-3">Rank</th><th class="px-4 py-3">Participant</th><th class="px-4 py-3">{{ $contest['method'] === 'wins' ? 'Wins' : 'Score' }}</th><th class="px-4 py-3">Points</th></tr></thead>
+                                            <tbody class="divide-y divide-slate-100">
+                                                @forelse ($contest['rows'] as $row)
+                                                    <tr><td class="px-4 py-3 font-bold text-maroon-700">#{{ $row['rank'] }}</td><td class="px-4 py-3 font-medium">{{ $row['name'] }}</td><td class="px-4 py-3">{{ $row['result'] }}</td><td class="px-4 py-3">{{ number_format($row['points'], 2) }}</td></tr>
+                                                @empty
+                                                    <tr><td colspan="4" class="px-4 py-6 text-center text-slate-500">No ranked scores yet.</td></tr>
+                                                @endforelse
+                                            </tbody>
+                                        </table></div>
+                                    </article>
+                                @endforeach
+                            </div>
+                        </section>
+                    @endif
+                @endforeach
+            </div>
+        </section>
         <p class="mt-4 text-center text-xs text-slate-500">Only finalized contest results appear here. This page updates automatically.</p>
         @endif
     </main>
@@ -101,15 +120,17 @@
     <script>
         (() => {
             const dataUrl = @json($dataUrl);
-            const scope = document.getElementById('leaderboard-scope');
-            const category = document.getElementById('leaderboard-category');
-            const game = document.getElementById('leaderboard-game');
+            const initialCategories = @json($initialCategories);
+            const filterForm = document.getElementById('contest-filter-form');
+            const categoryFilter = document.getElementById('contest-category-filter');
+            const applyFilterButton = document.getElementById('apply-contest-filter');
+            const contestCards = document.getElementById('contest-cards');
             const rows = document.getElementById('leaderboard-rows');
             const status = document.getElementById('leaderboard-status');
             const frozenMessage = document.getElementById('frozen-message');
-            const resultHeading = document.getElementById('result-heading');
             const participantPlaceholderUrl = @json(asset('images/participant-placeholder.svg'));
             let currentRequest;
+            let appliedCategoryId = 'all';
 
             function showMessage(message, frozen = false) {
                 rows.replaceChildren();
@@ -158,31 +179,98 @@
                 row.append(cell);
             }
 
-            async function refresh(force = false) {
+            function renderCards(categories) {
+                contestCards.replaceChildren();
+
+                for (const category of categories) {
+                    if (category.contests.length === 0) continue;
+                    const section = document.createElement('section');
+                    section.dataset.categoryCard = String(category.id);
+                    section.className = 'overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm';
+                    const heading = document.createElement('h3');
+                    heading.className = 'border-b border-slate-200 bg-slate-50 px-6 py-4 text-lg font-semibold';
+                    heading.textContent = category.name;
+                    section.append(heading);
+                    const grid = document.createElement('div');
+                    grid.className = 'grid gap-5 p-5 xl:grid-cols-2';
+
+                    for (const contest of category.contests) {
+                        const card = document.createElement('article');
+                        card.className = 'overflow-hidden rounded-xl border border-slate-200';
+                        const title = document.createElement('h4');
+                        title.className = 'border-b border-slate-200 px-5 py-4 font-semibold';
+                        title.textContent = contest.name;
+                        card.append(title);
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'overflow-x-auto';
+                        const table = document.createElement('table');
+                        table.className = 'w-full min-w-[440px] text-left text-sm';
+                        const thead = document.createElement('thead');
+                        thead.className = 'bg-slate-50 text-xs uppercase tracking-wide text-slate-500';
+                        const header = document.createElement('tr');
+                        for (const label of ['Rank', 'Participant', contest.method === 'wins' ? 'Wins' : 'Score', 'Points']) {
+                            const th = document.createElement('th');
+                            th.className = 'px-4 py-3';
+                            th.textContent = label;
+                            header.append(th);
+                        }
+                        thead.append(header);
+                        table.append(thead);
+                        const body = document.createElement('tbody');
+                        body.className = 'divide-y divide-slate-100';
+
+                        for (const result of contest.rows) {
+                            const row = document.createElement('tr');
+                            addCell(row, `#${result.rank}`, 'px-4 py-3 font-bold text-maroon-700');
+                            addParticipantCell(row, result);
+                            addCell(row, result.result, 'px-4 py-3 text-right');
+                            addCell(row, Number(result.points).toFixed(2), 'px-4 py-3 text-right font-semibold');
+                            body.append(row);
+                        }
+
+                        if (!contest.rows.length) {
+                            const row = document.createElement('tr');
+                            const cell = document.createElement('td');
+                            cell.colSpan = 4;
+                            cell.className = 'px-4 py-6 text-center text-slate-500';
+                            cell.textContent = 'No ranked scores yet.';
+                            row.append(cell);
+                            body.append(row);
+                        }
+
+                        table.append(body);
+                        wrapper.append(table);
+                        card.append(wrapper);
+                        grid.append(card);
+                    }
+
+                    section.append(grid);
+                    contestCards.append(section);
+                }
+
+                if (!contestCards.childElementCount) {
+                    const empty = document.createElement('p');
+                    empty.className = 'rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500';
+                    empty.textContent = 'No finalized contests yet.';
+                    contestCards.append(empty);
+                }
+
+            }
+
+            async function refresh(force = false, showFilterLoading = false) {
                 if (document.hidden || (currentRequest && !force)) return;
                 currentRequest?.abort();
                 currentRequest = undefined;
-                const selectedScope = scope.value;
-                document.getElementById('category-filter').classList.toggle('hidden', selectedScope !== 'category');
-                document.getElementById('game-filter').classList.toggle('hidden', selectedScope !== 'game');
-                resultHeading.textContent = selectedScope === 'game'
-                    ? (game.selectedOptions[0]?.dataset.scoringMethod === 'wins' ? 'Wins' : 'Score')
-                    : 'Contest wins';
-
-                if ((selectedScope === 'category' && !category.value) || (selectedScope === 'game' && !game.value)) {
-                    frozenMessage.classList.add('hidden');
-                    status.textContent = 'Results pending';
-                    showMessage('No categories or games have been configured.');
-                    return;
-                }
-
                 const request = new AbortController();
                 currentRequest = request;
-
                 const url = new URL(dataUrl);
-                url.searchParams.set('scope', selectedScope);
-                if (selectedScope === 'category') url.searchParams.set('category_id', category.value);
-                if (selectedScope === 'game') url.searchParams.set('competition_id', game.value);
+                if (appliedCategoryId !== 'all') url.searchParams.set('category_id', appliedCategoryId);
+
+                if (showFilterLoading) {
+                    applyFilterButton.disabled = true;
+                    applyFilterButton.textContent = 'Loading…';
+                    contestCards.setAttribute('aria-busy', 'true');
+                }
 
                 try {
                     const response = await fetch(url, {
@@ -197,17 +285,20 @@
                     if (data.frozen) {
                         status.textContent = 'Public results frozen';
                         showMessage('Results hidden until unfrozen', true);
+                        contestCards.replaceChildren();
                     } else if (!data.rows.length) {
                         status.textContent = 'Results pending';
                         showMessage('Results pending. No contest has been finalized yet.');
+                        renderCards(data.categories);
                     } else {
                         status.textContent = 'Live finalized results';
+                        renderCards(data.categories);
                         rows.replaceChildren();
                         for (const result of data.rows) {
                             const row = document.createElement('tr');
                             addCell(row, `#${result.rank}`, 'px-6 py-4 font-bold text-maroon-700');
                             addParticipantCell(row, result);
-                            addCell(row, selectedScope === 'game' ? result.result : result.contest_wins, 'px-6 py-4 text-right text-slate-600');
+                            addCell(row, result.contest_wins, 'px-6 py-4 text-right text-slate-600');
                             addCell(row, Number(result.points).toFixed(2), 'px-6 py-4 text-right font-semibold');
                             rows.append(row);
                         }
@@ -217,11 +308,21 @@
                     status.textContent = 'Connection problem';
                     showMessage('Could not load results. Retrying shortly.');
                 } finally {
-                    if (currentRequest === request) currentRequest = undefined;
+                    if (currentRequest === request) {
+                        currentRequest = undefined;
+                        applyFilterButton.disabled = false;
+                        applyFilterButton.textContent = 'Apply filter';
+                        contestCards.removeAttribute('aria-busy');
+                    }
                 }
             }
 
-            [scope, category, game].forEach(element => element.addEventListener('change', () => refresh(true)));
+            filterForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                appliedCategoryId = categoryFilter.value;
+                refresh(true, true);
+            });
+            if (!@json($event->leaderboard_frozen)) renderCards(initialCategories);
             document.addEventListener('visibilitychange', () => {
                 if (!document.hidden) refresh(true);
             });

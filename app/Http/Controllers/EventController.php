@@ -60,6 +60,13 @@ final class EventController extends Controller
                     'criteria',
                     'results' => fn ($resultQuery) => $resultQuery->where('has_entry', true),
                 ])
+                ->withExists([
+                    'results as has_saved_scores' => fn ($query) => $query
+                        ->where('has_entry', true)
+                        ->where(fn ($scoreQuery) => $scoreQuery
+                            ->whereNotNull('wins')
+                            ->orWhereHas('criterionScores')),
+                ])
                 ->orderBy('name'),
         ]);
 
