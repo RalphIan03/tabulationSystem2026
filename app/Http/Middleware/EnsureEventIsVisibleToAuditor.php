@@ -15,7 +15,9 @@ final class EnsureEventIsVisibleToAuditor
     {
         $event = $request->route('event');
 
-        if ($event instanceof Event && ! $event->is_active && ! $request->user()?->isAdmin()) {
+        if ($event instanceof Event
+            && (! $event->is_active || $event->isArchived())
+            && ! $request->user()?->isAdmin()) {
             abort(404);
         }
 

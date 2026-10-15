@@ -40,6 +40,13 @@
                         @method('PATCH')
                         <button type="submit" class="inline-flex h-11 items-center justify-center rounded-xl border border-white/30 bg-maroon-950/30 px-5 text-sm font-semibold text-white transition hover:bg-white/10">{{ $event->is_active ? 'Deactivate event' : 'Activate event' }}</button>
                     </form>
+                    @if ($event->canBeArchived())
+                        <form method="POST" action="{{ route('events.archive', $event, false) }}" data-loading-text="Archiving event…" onsubmit="return confirm('Archive this event? It will become read-only, and only report and result downloads will remain available.')">
+                            @csrf
+                            @method('PATCH')
+                            <button type="submit" class="inline-flex h-11 items-center justify-center rounded-xl border border-white/30 bg-maroon-950/30 px-5 text-sm font-semibold text-white transition hover:bg-white/10">Archive event</button>
+                        </form>
+                    @endif
                 @endif
 
                 <a href="{{ route('events.leaderboard', $event) }}" class="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/30 bg-maroon-950/30 px-5 text-sm font-semibold text-white transition hover:bg-white/10 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/30">

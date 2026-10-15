@@ -28,6 +28,7 @@ final class Event extends Model
         'other_scoring_system',
         'leaderboard_frozen',
         'is_active',
+        'archived_at',
     ];
 
     protected function casts(): array
@@ -39,7 +40,19 @@ final class Event extends Model
             'tie_ranking_method' => TieRankingMethod::class,
             'leaderboard_frozen' => 'boolean',
             'is_active' => 'boolean',
+            'archived_at' => 'immutable_datetime',
         ];
+    }
+
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
+    }
+
+    public function canBeArchived(): bool
+    {
+        return ! $this->isArchived()
+            && (! $this->is_active || $this->end_date->isBefore(today()));
     }
 
     public function creator(): BelongsTo

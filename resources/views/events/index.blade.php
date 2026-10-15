@@ -6,12 +6,12 @@
 @section('content')
     <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-            <p class="text-sm font-semibold text-maroon-700">Event management</p>
-            <h2 class="mt-1 text-3xl font-semibold tracking-tight text-slate-950">Your events</h2>
-            <p class="mt-2 text-sm text-slate-500">{{ auth()->user()->isAdmin() ? 'Create an event, then configure its participants, categories, and competitions.' : 'Open an event to manage participants, categories, contests, and scoring.' }}</p>
+            <p class="text-sm font-semibold text-maroon-700">{{ $showArchived ? 'Event archive' : 'Event management' }}</p>
+            <h2 class="mt-1 text-3xl font-semibold tracking-tight text-slate-950">{{ $showArchived ? 'Archived events' : 'Your events' }}</h2>
+            <p class="mt-2 text-sm text-slate-500">{{ $showArchived ? 'Archived events are read-only. Open one to download its results and contest reports.' : (auth()->user()->isAdmin() ? 'Create an event, then configure its participants, categories, and competitions.' : 'Open an event to manage participants, categories, contests, and scoring.') }}</p>
         </div>
 
-        @if (auth()->user()->isAdmin())
+        @if (auth()->user()->isAdmin() && ! $showArchived)
             <button id="open-event-dialog" type="button" class="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-maroon-700 px-5 text-sm font-semibold text-white shadow-lg shadow-maroon-700/20 transition hover:bg-maroon-800 focus:outline-none focus-visible:ring-4 focus-visible:ring-maroon-600/25">
                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" aria-hidden="true">
                     <path d="M12 5v14M5 12h14" stroke-linecap="round" />
@@ -21,6 +21,13 @@
         @endif
     </div>
 
+    @if (auth()->user()->isAdmin())
+        <nav class="mt-6 flex gap-2" aria-label="Event lists">
+            <a href="{{ route('events.index') }}" @class(['rounded-lg px-4 py-2 text-sm font-semibold', 'bg-maroon-700 text-white' => ! $showArchived, 'bg-white text-slate-600 hover:bg-slate-50' => $showArchived])>Current events</a>
+            <a href="{{ route('events.index', ['archived' => 1], false) }}" @class(['rounded-lg px-4 py-2 text-sm font-semibold', 'bg-maroon-700 text-white' => $showArchived, 'bg-white text-slate-600 hover:bg-slate-50' => ! $showArchived])>Archived ({{ $archivedCount }})</a>
+        </nav>
+    @endif
+
     @if ($events->isEmpty())
         <section class="mt-8 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center">
             <span class="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-maroon-50 text-maroon-700">
@@ -29,19 +36,25 @@
                     <path d="M16 3v4M8 3v4M3 10h18" stroke-linecap="round" />
                 </svg>
             </span>
-            <h3 class="mt-5 text-lg font-semibold text-slate-950">No events available</h3>
-            <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">{{ auth()->user()->isAdmin() ? 'Create your first event to begin adding participants, categories, and competitions.' : 'An administrator must create an event before it can be managed.' }}</p>
+            <h3 class="mt-5 text-lg font-semibold text-slate-950">{{ $showArchived ? 'No archived events' : 'No events available' }}</h3>
+            <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">{{ $showArchived ? 'Completed or inactive events can be archived from their event page.' : (auth()->user()->isAdmin() ? 'Create your first event to begin adding participants, categories, and competitions.' : 'An administrator must create an event before it can be managed.') }}</p>
         </section>
     @else
         <section class="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3" aria-label="Events">
             @foreach ($events as $event)
                 @php
                     $today = now()->startOfDay();
-                    $status = ! $event->is_active
-                        ? 'Inactive'
-                        : ($today->lt($event->start_date)
-                            ? 'Upcoming'
-                            : ($today->gt($event->end_date) ? 'Completed' : 'Active'));
+                    if ($event->isArchived()) {
+                        $status = 'Archived';
+                    } elseif (! $event->is_active) {
+                        $status = 'Inactive';
+                    } elseif ($today->lt($event->start_date)) {
+                        $status = 'Upcoming';
+                    } elseif ($today->gt($event->end_date)) {
+                        $status = 'Completed';
+                    } else {
+                        $status = 'Active';
+                    }
                     $statusClasses = match ($status) {
                         'Active' => 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
                         'Upcoming' => 'bg-maroon-50 text-maroon-700 ring-maroon-600/20',
@@ -55,7 +68,7 @@
                     <div class="flex items-start justify-between gap-4">
                         <span class="rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset {{ $statusClasses }}">{{ $status }}</span>
 
-                        @if ($event->leaderboard_frozen)
+                        @if ($event->leaderboard_frozen && ! $event->isArchived())
                             <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700">
                                 <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <rect x="5" y="11" width="14" height="10" rx="2" />
@@ -77,7 +90,7 @@
                     <div class="mt-auto flex items-center justify-between pt-6">
                         <span class="text-xs text-slate-500">{{ $event->participants_count }} participants · {{ $event->categories_count }} categories</span>
                         <span class="inline-flex items-center gap-1 text-sm font-semibold text-maroon-700">
-                            Configure
+                            {{ $event->isArchived() ? 'View downloads' : 'Configure' }}
                             <svg class="h-4 w-4 transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                 <path d="m9 18 6-6-6-6" stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
@@ -86,12 +99,22 @@
                     </a>
 
                     <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-6 py-3">
+                        @if ($event->isArchived())
+                        <a href="{{ route('events.results.download', $event, false) }}" data-export-download data-loading-text="Exporting event results…" class="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-semibold text-maroon-700 transition hover:bg-maroon-50">Download results (CSV)</a>
+                        @else
                         <a href="{{ route('events.leaderboard', $event) }}" class="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-semibold text-maroon-700 transition hover:bg-maroon-50 hover:text-maroon-900">
                             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19V9m6 10V5m6 14v-7m4 7H2" stroke-linecap="round" stroke-linejoin="round" /></svg>
                             Current leaderboard
                         </a>
 
                         @if (auth()->user()->isAdmin())
+                        @if ($event->canBeArchived())
+                        <form method="POST" action="{{ route('events.archive', $event, false) }}" data-loading-text="Archiving event…" onsubmit="return confirm('Archive this event? Only report and result downloads will remain available.')">
+                            @csrf
+                            @method('PATCH')
+                            <button type="submit" class="rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Archive</button>
+                        </form>
+                        @endif
                         <form method="POST" action="{{ route('events.toggle-status', $event, false) }}" data-loading-text="{{ $event->is_active ? 'Deactivating event…' : 'Activating event…' }}" onsubmit="return confirm('{{ $event->is_active ? 'Deactivate this event? Auditors will no longer see or access it.' : 'Activate this event? Auditors will be able to access it again.' }}')">
                             @csrf
                             @method('PATCH')
@@ -110,13 +133,14 @@
                             </button>
                         </form>
                         @endif
+                        @endif
                     </div>
                 </article>
             @endforeach
         </section>
     @endif
 
-    @if (auth()->user()->isAdmin())
+    @if (auth()->user()->isAdmin() && ! $showArchived)
     <dialog id="event-dialog" class="m-auto w-[calc(100%-2rem)] max-w-xl rounded-2xl bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-950/70">
         <form method="POST" action="{{ route('events.store', [], false) }}">
             @csrf
@@ -190,7 +214,7 @@
     @endif
 @endsection
 
-@if (auth()->user()->isAdmin())
+@if (auth()->user()->isAdmin() && ! $showArchived)
 @push('scripts')
     <script>
         const eventDialog = document.getElementById('event-dialog');

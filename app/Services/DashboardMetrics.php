@@ -34,6 +34,7 @@ final class DashboardMetrics
     public function forAdmin(): array
     {
         $events = $this->cache->adminEvents(fn (): Collection => Event::query()
+            ->whereNull('archived_at')
             ->withCount([
                 'participants',
                 'competitions',
@@ -95,6 +96,7 @@ final class DashboardMetrics
     {
         $today = today();
         $events = $this->cache->auditorEvents(fn (): Collection => Event::query()
+            ->whereNull('archived_at')
             ->where('is_active', true)
             ->where('start_date', '<=', $today->toDateString())
             ->where('end_date', '>=', $today->toDateString())

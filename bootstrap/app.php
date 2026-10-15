@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureEventIsNotArchived;
 use App\Http\Middleware\EnsureEventIsVisibleToAuditor;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\EnsureUserIsAdmin;
@@ -22,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => EnsureUserIsAdmin::class,
             'auditor' => EnsureUserIsAuditor::class,
             'visible-event' => EnsureEventIsVisibleToAuditor::class,
+            'archive-guard' => EnsureEventIsNotArchived::class,
         ]);
         $middleware->appendToGroup('web', LogUserInteraction::class);
     })

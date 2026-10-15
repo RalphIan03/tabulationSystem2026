@@ -13,13 +13,20 @@ use App\Models\Event;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 final class EventController extends Controller
 {
     public function index(Request $request): View
     {
+        $showArchived = $request->user()->isAdmin() && $request->boolean('archived');
         $events = Event::query()
+            ->when(
+                $showArchived,
+                fn ($query) => $query->whereNotNull('archived_at'),
+                fn ($query) => $query->whereNull('archived_at'),
+            )
             ->when(! $request->user()->isAdmin(), fn ($query) => $query->where('is_active', true))
             ->withCount(['participants', 'categories'])
             ->orderByDesc('start_date')
@@ -28,6 +35,10 @@ final class EventController extends Controller
         return view('events.index', [
             'events' => $events,
             'scoringSystems' => ScoringSystem::cases(),
+            'showArchived' => $showArchived,
+            'archivedCount' => $request->user()->isAdmin()
+                ? Event::query()->whereNotNull('archived_at')->count()
+                : 0,
         ]);
     }
 
@@ -53,6 +64,15 @@ final class EventController extends Controller
 
     public function show(Request $request, Event $event): View
     {
+        if ($event->isArchived()) {
+            $event->load([
+                'categories' => fn ($query) => $query->orderBy('name'),
+                'categories.competitions' => fn ($query) => $query->orderBy('name'),
+            ]);
+
+            return view('events.archived', ['event' => $event]);
+        }
+
         $event->load([
             'participants' => fn ($query) => $query->orderBy('name'),
             'categories' => fn ($query) => $query->orderBy('name'),
@@ -112,6 +132,24 @@ final class EventController extends Controller
 
         return to_route('events.index')
             ->with('status', $event->is_active ? 'Event activated successfully.' : 'Event deactivated successfully.');
+    }
+
+    public function archive(Event $event): RedirectResponse
+    {
+        if (! $event->canBeArchived()) {
+            throw ValidationException::withMessages([
+                'archive' => 'Only completed or inactive events can be archived.',
+            ]);
+        }
+
+        $event->update([
+            'archived_at' => now(),
+            'is_active' => false,
+            'leaderboard_frozen' => true,
+        ]);
+
+        return to_route('events.show', $event)
+            ->with('status', 'Event archived. Reports and results remain available for download.');
     }
 
     public function updateTieRanking(UpdateEventTieRankingRequest $request, Event $event): RedirectResponse

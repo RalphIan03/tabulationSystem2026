@@ -18,12 +18,14 @@ final class PublicLeaderboardController extends Controller
     {
         $today = today()->toDateString();
         $event = Event::query()
+            ->whereNull('archived_at')
             ->where('start_date', '<=', $today)
             ->where('end_date', '>=', $today)
             ->orderByDesc('start_date')
             ->orderByDesc('id')
             ->first()
             ?? Event::query()
+                ->whereNull('archived_at')
                 ->orderByDesc('start_date')
                 ->orderByDesc('id')
                 ->first();
@@ -33,6 +35,8 @@ final class PublicLeaderboardController extends Controller
 
     public function show(Event $event): Response
     {
+        abort_if($event->isArchived(), 404);
+
         return $this->render($event);
     }
 
@@ -63,6 +67,8 @@ final class PublicLeaderboardController extends Controller
 
     public function data(Request $request, Event $event): JsonResponse
     {
+        abort_if($event->isArchived(), 404);
+
         $filters = $request->validate([
             'scope' => ['sometimes', 'in:overall,category,game'],
             'category_id' => ['required_if:scope,category', 'nullable', 'integer'],

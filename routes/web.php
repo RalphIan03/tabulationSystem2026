@@ -13,6 +13,7 @@ use App\Http\Controllers\CriterionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\EventLeaderboardController;
+use App\Http\Controllers\EventResultsDownloadController;
 use App\Http\Controllers\ParticipantController;
 use App\Http\Controllers\PublicLeaderboardController;
 use App\Http\Controllers\RankScoreController;
@@ -33,7 +34,7 @@ Route::middleware('guest')->group(function (): void {
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->name('login.store');
 });
 
-Route::middleware(['auth', 'active', 'visible-event'])->group(function (): void {
+Route::middleware(['auth', 'active', 'visible-event', 'archive-guard'])->group(function (): void {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::middleware('auditor')->group(function (): void {
@@ -54,6 +55,8 @@ Route::middleware(['auth', 'active', 'visible-event'])->group(function (): void 
             ->name('events.details.update');
         Route::patch('/events/{event}/status', [EventController::class, 'toggleStatus'])
             ->name('events.toggle-status');
+        Route::patch('/events/{event}/archive', [EventController::class, 'archive'])
+            ->name('events.archive');
         Route::delete('/events/{event}', [EventController::class, 'destroy'])
             ->name('events.destroy');
         Route::patch('/events/{event}/leaderboard-freeze', [EventController::class, 'toggleLeaderboardFreeze'])
@@ -70,6 +73,8 @@ Route::middleware(['auth', 'active', 'visible-event'])->group(function (): void 
         ->name('events.tie-ranking.update');
     Route::get('/events/{event}/leaderboard', [EventLeaderboardController::class, 'show'])
         ->name('events.leaderboard');
+    Route::get('/events/{event}/results/download', [EventResultsDownloadController::class, 'download'])
+        ->name('events.results.download');
 
     Route::scopeBindings()->group(function (): void {
         Route::post('/events/{event}/participants', [ParticipantController::class, 'store'])
