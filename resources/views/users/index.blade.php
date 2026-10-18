@@ -98,6 +98,9 @@
                                     ])></span>
                                     {{ $account->is_active ? 'Active' : 'Inactive' }}
                                 </span>
+                                @if ($account->must_change_credentials)
+                                    <span class="mt-1 block text-xs font-medium text-amber-700">Credential change required</span>
+                                @endif
                             </td>
                             <td class="px-5 py-4 text-xs text-slate-500">
                                 <span class="block font-medium text-slate-700">{{ $account->created_at->format('M j, Y') }}</span>
@@ -143,7 +146,7 @@
             <div class="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-6 py-5">
                 <div>
                     <h3 id="add-user-title" class="text-xl font-semibold text-slate-950">Add user</h3>
-                    <p class="mt-1 text-sm text-slate-500">Create an Admin or Auditor account.</p>
+                    <p class="mt-1 text-sm text-slate-500">Create an Admin or Auditor account. They must change the assigned username and password at first sign-in.</p>
                 </div>
                 <button type="button" data-dialog-close class="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" aria-label="Close add user dialog">
                     <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">

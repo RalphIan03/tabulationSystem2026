@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureCredentialsAreUpdated;
 use App\Http\Middleware\EnsureEventIsNotArchived;
 use App\Http\Middleware\EnsureEventIsVisibleToAuditor;
 use App\Http\Middleware\EnsureUserIsActive;
@@ -24,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'auditor' => EnsureUserIsAuditor::class,
             'visible-event' => EnsureEventIsVisibleToAuditor::class,
             'archive-guard' => EnsureEventIsNotArchived::class,
+            'credentials-updated' => EnsureCredentialsAreUpdated::class,
         ]);
         $middleware->appendToGroup('web', LogUserInteraction::class);
     })

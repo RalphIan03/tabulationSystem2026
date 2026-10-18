@@ -23,6 +23,10 @@ final class AuthenticatedSessionController extends Controller
         $request->authenticate();
         $request->session()->regenerate();
 
+        if ($request->user()->must_change_credentials) {
+            return to_route('credentials.edit');
+        }
+
         return redirect()->intended(route('dashboard', absolute: false));
     }
 

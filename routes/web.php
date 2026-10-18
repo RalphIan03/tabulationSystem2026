@@ -9,6 +9,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CompetitionController;
 use App\Http\Controllers\CompetitionScoreController;
 use App\Http\Controllers\CompetitionScoreExportController;
+use App\Http\Controllers\CredentialSetupController;
 use App\Http\Controllers\CriterionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EventController;
@@ -34,7 +35,11 @@ Route::middleware('guest')->group(function (): void {
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->name('login.store');
 });
 
-Route::middleware(['auth', 'active', 'visible-event', 'archive-guard'])->group(function (): void {
+Route::middleware(['auth', 'active', 'credentials-updated', 'visible-event', 'archive-guard'])->group(function (): void {
+    Route::get('/change-credentials', [CredentialSetupController::class, 'edit'])
+        ->name('credentials.edit');
+    Route::patch('/change-credentials', [CredentialSetupController::class, 'update'])
+        ->name('credentials.update');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::middleware('auditor')->group(function (): void {

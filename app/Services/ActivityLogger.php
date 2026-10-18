@@ -45,6 +45,7 @@ final class ActivityLogger
         'users.toggle-status' => 'Changed a user account status',
         'auditor-account.details.update' => 'Updated own account details',
         'auditor-account.password.update' => 'Changed own password',
+        'credentials.update' => 'Changed initial username and password',
     ];
 
     public function __construct(

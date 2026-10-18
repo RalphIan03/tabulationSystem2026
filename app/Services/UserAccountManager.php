@@ -14,7 +14,11 @@ final class UserAccountManager
     /** @param array<string, mixed> $attributes */
     public function create(array $attributes): User
     {
-        return User::query()->create($attributes);
+        $account = new User($attributes);
+        $account->must_change_credentials = true;
+        $account->save();
+
+        return $account;
     }
 
     /** @param array<string, mixed> $attributes */
@@ -43,6 +47,12 @@ final class UserAccountManager
 
             if (blank($attributes['password'] ?? null)) {
                 unset($attributes['password']);
+            }
+
+            if ($lockedAccount->username !== $attributes['username']
+                || array_key_exists('password', $attributes)
+                || ($lockedAccount->role !== $newRole && $newRole === AccountRole::Auditor)) {
+                $lockedAccount->must_change_credentials = true;
             }
 
             $lockedAccount->update($attributes);
