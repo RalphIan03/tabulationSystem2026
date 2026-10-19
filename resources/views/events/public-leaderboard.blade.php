@@ -73,7 +73,7 @@
         </section>
         <section class="mt-6" aria-label="Contest results">
             <div class="flex flex-wrap items-end justify-between gap-3">
-                <div><h2 class="text-xl font-semibold text-slate-950">Contests by category</h2><p class="mt-1 text-sm text-slate-500">By category, browse finalized contests. By game, compare participant scores in each table. Choose a category and click Apply filter to load it.</p></div>
+                <div><h2 class="text-xl font-semibold text-slate-950">Contests by category</h2><p class="mt-1 text-sm text-slate-500">Browse every contest by category. Rankings appear after scores are finalized. Choose a category and click Apply filter to load it.</p></div>
                 <form id="contest-filter-form" class="flex flex-wrap items-end gap-3">
                     <label class="grid gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Category filter
                         <select id="contest-category-filter" class="h-11 min-w-48 rounded-xl border border-slate-300 bg-white px-3 text-sm normal-case focus:border-maroon-600 focus:ring-maroon-600">
@@ -93,18 +93,30 @@
                             <h3 class="border-b border-slate-200 bg-slate-50 px-6 py-4 text-lg font-semibold">{{ $category['name'] }}</h3>
                             <div class="grid gap-5 p-5 xl:grid-cols-2">
                                 @foreach ($category['contests'] as $contest)
-                                    <article class="overflow-hidden rounded-xl border border-slate-200">
+                                    <article data-contest-card="{{ $contest['id'] }}" class="overflow-hidden rounded-xl border border-slate-200">
                                         <h4 class="border-b border-slate-200 px-5 py-4 font-semibold">{{ $contest['name'] }}</h4>
-                                        <div class="overflow-x-auto"><table class="w-full min-w-[440px] text-left text-sm">
-                                            <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-4 py-3">Rank</th><th class="px-4 py-3">Participant</th><th class="px-4 py-3">{{ $contest['method'] === 'wins' ? 'Wins' : 'Score' }}</th><th class="px-4 py-3">Points</th></tr></thead>
-                                            <tbody class="divide-y divide-slate-100">
-                                                @forelse ($contest['rows'] as $row)
-                                                    <tr><td class="px-4 py-3 font-bold text-maroon-700">#{{ $row['rank'] }}</td><td class="px-4 py-3 font-medium">{{ $row['name'] }}</td><td class="px-4 py-3">{{ $row['result'] }}</td><td class="px-4 py-3">{{ number_format($row['points'], 2) }}</td></tr>
-                                                @empty
-                                                    <tr><td colspan="4" class="px-4 py-6 text-center text-slate-500">No ranked scores yet.</td></tr>
-                                                @endforelse
-                                            </tbody>
-                                        </table></div>
+                                        @if (! $contest['finalized'])
+                                            <p class="px-5 py-8 text-center text-sm text-slate-500">No finalized score</p>
+                                        @else
+                                            <div class="overflow-x-auto"><table class="w-full text-left text-sm">
+                                                <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th scope="col" class="px-4 py-3">Rank</th><th scope="col" class="px-4 py-3">Participant</th></tr></thead>
+                                                <tbody class="divide-y divide-slate-100">
+                                                    @forelse ($contest['rows'] as $row)
+                                                        <tr>
+                                                            <td class="px-4 py-3 font-bold text-maroon-700">#{{ $row['rank'] }}</td>
+                                                            <td class="px-4 py-3 font-medium">
+                                                                <span class="flex items-center gap-3">
+                                                                    <img src="{{ $row['profile_image_url'] ?: asset('images/participant-placeholder.svg') }}" alt="{{ $row['profile_image_url'] ? $row['name'].' profile picture' : 'Participant photo placeholder' }}" onerror="this.onerror=null;this.src='{{ asset('images/participant-placeholder.svg') }}';this.alt='Participant photo placeholder'" class="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-slate-200">
+                                                                    {{ $row['name'] }}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    @empty
+                                                        <tr><td colspan="2" class="px-4 py-6 text-center text-slate-500">No ranked participants yet.</td></tr>
+                                                    @endforelse
+                                                </tbody>
+                                            </table></div>
+                                        @endif
                                     </article>
                                 @endforeach
                             </div>
@@ -113,7 +125,7 @@
                 @endforeach
             </div>
         </section>
-        <p class="mt-4 text-center text-xs text-slate-500">Only finalized contest results appear here. This page updates automatically.</p>
+        <p class="mt-4 text-center text-xs text-slate-500">Contest rankings appear after scores are finalized. This page updates automatically.</p>
         @endif
     </main>
 
@@ -197,19 +209,30 @@
 
                     for (const contest of category.contests) {
                         const card = document.createElement('article');
+                        card.dataset.contestCard = String(contest.id);
                         card.className = 'overflow-hidden rounded-xl border border-slate-200';
                         const title = document.createElement('h4');
                         title.className = 'border-b border-slate-200 px-5 py-4 font-semibold';
                         title.textContent = contest.name;
                         card.append(title);
+
+                        if (!contest.finalized) {
+                            const pending = document.createElement('p');
+                            pending.className = 'px-5 py-8 text-center text-sm text-slate-500';
+                            pending.textContent = 'No finalized score';
+                            card.append(pending);
+                            grid.append(card);
+                            continue;
+                        }
+
                         const wrapper = document.createElement('div');
                         wrapper.className = 'overflow-x-auto';
                         const table = document.createElement('table');
-                        table.className = 'w-full min-w-[440px] text-left text-sm';
+                        table.className = 'w-full text-left text-sm';
                         const thead = document.createElement('thead');
                         thead.className = 'bg-slate-50 text-xs uppercase tracking-wide text-slate-500';
                         const header = document.createElement('tr');
-                        for (const label of ['Rank', 'Participant', contest.method === 'wins' ? 'Wins' : 'Score', 'Points']) {
+                        for (const label of ['Rank', 'Participant']) {
                             const th = document.createElement('th');
                             th.className = 'px-4 py-3';
                             th.textContent = label;
@@ -224,17 +247,15 @@
                             const row = document.createElement('tr');
                             addCell(row, `#${result.rank}`, 'px-4 py-3 font-bold text-maroon-700');
                             addParticipantCell(row, result);
-                            addCell(row, result.result, 'px-4 py-3 text-right');
-                            addCell(row, Number(result.points).toFixed(2), 'px-4 py-3 text-right font-semibold');
                             body.append(row);
                         }
 
                         if (!contest.rows.length) {
                             const row = document.createElement('tr');
                             const cell = document.createElement('td');
-                            cell.colSpan = 4;
+                            cell.colSpan = 2;
                             cell.className = 'px-4 py-6 text-center text-slate-500';
-                            cell.textContent = 'No ranked scores yet.';
+                            cell.textContent = 'No ranked participants yet.';
                             row.append(cell);
                             body.append(row);
                         }
@@ -252,7 +273,7 @@
                 if (!contestCards.childElementCount) {
                     const empty = document.createElement('p');
                     empty.className = 'rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500';
-                    empty.textContent = 'No finalized contests yet.';
+                    empty.textContent = 'No contests available.';
                     contestCards.append(empty);
                 }
 

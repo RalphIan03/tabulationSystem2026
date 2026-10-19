@@ -41,6 +41,7 @@ final class PublicLeaderboardTest extends TestCase
         $admin = User::factory()->create(['role' => AccountRole::Admin]);
         $event = Event::factory()->for($admin, 'creator')->create();
         $participant = $event->participants()->create(['name' => 'Alex Santos']);
+        $otherParticipant = $event->participants()->create(['name' => 'Bea Cruz']);
         $category = $event->categories()->create(['name' => 'Sports']);
         $competition = $category->competitions()->create([
             'name' => 'Basketball',
@@ -48,18 +49,21 @@ final class PublicLeaderboardTest extends TestCase
             'scores_finalized_at' => now(),
         ]);
         $competition->results()->create(['participant_id' => $participant->id, 'wins' => 2]);
+        $competition->results()->create(['participant_id' => $otherParticipant->id, 'wins' => 4]);
 
         $this->getJson(route('leaderboards.data', $event))
-            ->assertJsonPath('categories.0.contests.0.rows.0.result', '2 wins');
+            ->assertJsonPath('categories.0.contests.0.rows.0.name', 'Bea Cruz')
+            ->assertJsonPath('categories.0.contests.0.rows.1.name', 'Alex Santos');
 
         $this->actingAs($admin)
             ->patch(route('events.categories.competitions.scores.update', [$event, $category, $competition]), [
-                'wins' => [$participant->id => 5],
+                'wins' => [$participant->id => 5, $otherParticipant->id => 4],
             ])
             ->assertRedirect();
 
         $this->getJson(route('leaderboards.data', $event))
-            ->assertJsonPath('categories.0.contests.0.rows.0.result', '5 wins');
+            ->assertJsonPath('categories.0.contests.0.rows.0.name', 'Alex Santos')
+            ->assertJsonPath('categories.0.contests.0.rows.1.name', 'Bea Cruz');
     }
 
     public function test_participant_and_rank_configuration_changes_refresh_cached_public_snapshot(): void
@@ -144,8 +148,8 @@ final class PublicLeaderboardTest extends TestCase
         $this->get(route('leaderboards.show', $event))
             ->assertOk()
             ->assertSee('University Games')
-            ->assertSee('By category')
-            ->assertSee('By game')
+            ->assertSee('Contests by category')
+            ->assertSee('Rankings appear after scores are finalized')
             ->assertSee('Basketball')
             ->assertSee('const dataUrl =', false);
 
@@ -196,7 +200,7 @@ final class PublicLeaderboardTest extends TestCase
             ->assertJsonPath('rows.0.profile_image_url', $pictureUrl);
     }
 
-    public function test_public_data_includes_only_finalized_contests_and_excludes_non_entries(): void
+    public function test_public_data_shows_finalized_rankings_and_pending_cards_without_non_entries(): void
     {
         $event = Event::factory()->create();
         $winner = $event->participants()->create(['name' => 'Alex Santos']);
@@ -237,6 +241,15 @@ final class PublicLeaderboardTest extends TestCase
             ->assertJsonPath('rows.0.contest_wins', 1)
             ->assertJsonPath('rows.0.points', 100);
 
+        $this->getJson(route('leaderboards.data', $event))
+            ->assertJsonPath('categories.0.contests.0.finalized', true)
+            ->assertJsonPath('categories.0.contests.0.rows.0.name', 'Alex Santos')
+            ->assertJsonMissingPath('categories.0.contests.0.rows.0.points')
+            ->assertJsonMissingPath('categories.0.contests.0.rows.0.result')
+            ->assertJsonPath('categories.0.contests.1.name', 'Volleyball')
+            ->assertJsonPath('categories.0.contests.1.finalized', false)
+            ->assertJsonCount(0, 'categories.0.contests.1.rows');
+
         $this->getJson(route('leaderboards.data', [$event, 'scope' => 'game', 'competition_id' => $finalized->id]))
             ->assertOk()
             ->assertJsonPath('rows.0.result', '3 wins')
@@ -263,15 +276,86 @@ final class PublicLeaderboardTest extends TestCase
         $response = $this->get(route('leaderboards.show', $event))->assertOk();
         $content = $response->getContent();
         $this->assertLessThan(strpos($content, 'Contests by category'), strpos($content, 'Overall score'));
-        $response->assertSee('Basketball')->assertDontSee('Volleyball')->assertSee('Category filter');
+        $response->assertSee('Basketball')->assertSee('Volleyball')->assertSee('No finalized score')->assertSee('Category filter');
         $response->assertSee('id="apply-contest-filter"', false)->assertSee('Apply filter');
+        $cardsStart = strpos($content, '<div id="contest-cards"');
+        $this->assertNotFalse($cardsStart);
+        $cardsEnd = strpos($content, '</section>', $cardsStart);
+        $this->assertNotFalse($cardsEnd);
+        $cards = substr($content, $cardsStart, $cardsEnd - $cardsStart);
+        $this->assertStringNotContainsString('Points</th>', $cards);
+        $this->assertStringNotContainsString('4 wins', $cards);
 
         $this->getJson(route('leaderboards.data', $event))
             ->assertOk()
             ->assertJsonPath('rows.0.name', 'Alex Santos')
             ->assertJsonPath('categories.0.name', 'Sports')
             ->assertJsonPath('categories.0.contests.0.name', 'Basketball')
-            ->assertJsonCount(1, 'categories.0.contests');
+            ->assertJsonPath('categories.0.contests.1.name', 'Volleyball')
+            ->assertJsonCount(2, 'categories.0.contests');
+    }
+
+    public function test_pending_contest_card_changes_to_rankings_only_after_finalization(): void
+    {
+        $event = Event::factory()->create();
+        $participant = $event->participants()->create(['name' => 'Alex Santos']);
+        $category = $event->categories()->create(['name' => 'Sports']);
+        $competition = $category->competitions()->create([
+            'name' => 'Basketball',
+            'scoring_method' => CompetitionScoringMethod::Wins,
+        ]);
+        $competition->results()->create(['participant_id' => $participant->id, 'wins' => 9]);
+
+        $this->get(route('leaderboards.show', $event))
+            ->assertSee('Basketball')
+            ->assertSee('No finalized score')
+            ->assertDontSee('Alex Santos');
+        $this->getJson(route('leaderboards.data', $event))
+            ->assertJsonCount(0, 'rows')
+            ->assertJsonPath('categories.0.contests.0.finalized', false)
+            ->assertJsonCount(0, 'categories.0.contests.0.rows');
+
+        $competition->update(['scores_finalized_at' => now()]);
+
+        $finalizedPage = $this->get(route('leaderboards.show', $event))
+            ->assertSee('Basketball')
+            ->assertSee('Alex Santos');
+        $cardStart = strpos($finalizedPage->getContent(), '<article data-contest-card="'.$competition->id.'"');
+        $this->assertNotFalse($cardStart);
+        $cardEnd = strpos($finalizedPage->getContent(), '</article>', $cardStart);
+        $this->assertNotFalse($cardEnd);
+        $this->assertStringNotContainsString(
+            'No finalized score',
+            substr($finalizedPage->getContent(), $cardStart, $cardEnd - $cardStart),
+        );
+        $this->getJson(route('leaderboards.data', $event))
+            ->assertJsonPath('categories.0.contests.0.finalized', true)
+            ->assertJsonPath('categories.0.contests.0.rows.0.rank', 1)
+            ->assertJsonPath('categories.0.contests.0.rows.0.name', 'Alex Santos')
+            ->assertJsonMissingPath('categories.0.contests.0.rows.0.points')
+            ->assertJsonMissingPath('categories.0.contests.0.rows.0.result');
+    }
+
+    public function test_finalized_card_shows_configured_winning_ranks_but_not_non_podium_entrants(): void
+    {
+        $event = Event::factory()->create();
+        $winner = $event->participants()->create(['name' => 'Alex Santos']);
+        $nonPodium = $event->participants()->create(['name' => 'Bea Cruz']);
+        $category = $event->categories()->create(['name' => 'Sports']);
+        $competition = $category->competitions()->create([
+            'name' => 'Basketball',
+            'scoring_method' => CompetitionScoringMethod::Wins,
+            'scores_finalized_at' => now(),
+        ]);
+        $competition->rankScores()->create(['rank' => 1, 'points' => 100]);
+        $competition->results()->create(['participant_id' => $winner->id, 'wins' => 5]);
+        $competition->results()->create(['participant_id' => $nonPodium->id, 'wins' => 2]);
+
+        $this->getJson(route('leaderboards.data', $event))
+            ->assertJsonCount(2, 'rows')
+            ->assertJsonCount(1, 'categories.0.contests.0.rows')
+            ->assertJsonPath('categories.0.contests.0.rows.0.rank', 1)
+            ->assertJsonPath('categories.0.contests.0.rows.0.name', 'Alex Santos');
     }
 
     public function test_apply_filter_data_loads_selected_contest_cards_but_keeps_overall_scores(): void

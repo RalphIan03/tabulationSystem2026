@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\Competition;
 use App\Models\Event;
 use App\Models\Participant;
 use Illuminate\Support\Facades\Storage;
@@ -55,25 +56,47 @@ final class PublicLeaderboardData
                 'contest_wins' => $row['contest_wins'],
                 'points' => $row['leaderboard_points'],
             ])->all();
+        $pendingContests = Competition::query()
+            ->whereIn('category_id', $event->categories->modelKeys())
+            ->whereNull('scores_finalized_at')
+            ->orderBy('name')
+            ->get(['id', 'category_id', 'name', 'scoring_method'])
+            ->groupBy('category_id');
         $categories = $event->categories
-            ->map(fn ($category): array => [
-                'id' => $category->getKey(),
-                'name' => $category->name,
-                'contests' => $category->competitions->map(fn ($competition): array => [
-                    'id' => $competition->getKey(),
-                    'name' => $competition->name,
-                    'method' => $competition->scoring_method->value,
-                    'rows' => $this->calculator->competitionStandings($competition, $event)
-                        ->map(fn (array $row): array => [
-                            'rank' => $row['rank'],
-                            ...$this->participantColumns($row['participant']),
-                            'result' => $competition->usesCriteriaScoring()
-                                ? number_format($row['raw_score'], 2, '.', '')
-                                : $row['wins'].' '.Str::plural('win', $row['wins']),
-                            'points' => $row['leaderboard_points'],
-                        ])->all(),
-                ])->all(),
-            ])->values()->all();
+            ->map(function ($category) use ($pendingContests, $event): array {
+                $finalized = $category->competitions->map(function ($competition) use ($event): array {
+                    $winningRanks = $competition->rankScores->pluck('rank')->all();
+
+                    return [
+                        'id' => $competition->getKey(),
+                        'name' => $competition->name,
+                        'method' => $competition->scoring_method->value,
+                        'finalized' => true,
+                        'rows' => $this->calculator->competitionStandings($competition, $event)
+                            ->filter(static fn (array $row): bool => $winningRanks === []
+                                || in_array($row['rank'], $winningRanks, true))
+                            ->values()
+                            ->map(fn (array $row): array => [
+                                'rank' => $row['rank'],
+                                ...$this->participantColumns($row['participant']),
+                            ])->all(),
+                    ];
+                });
+                $pending = $pendingContests->get($category->getKey(), collect())
+                    ->map(fn ($competition): array => [
+                        'id' => $competition->getKey(),
+                        'name' => $competition->name,
+                        'method' => $competition->scoring_method->value,
+                        'finalized' => false,
+                        'rows' => [],
+                    ]);
+
+                return [
+                    'id' => $category->getKey(),
+                    'name' => $category->name,
+                    'contests' => $finalized->concat($pending)->sortBy('name')->values()->all(),
+                ];
+            })->values()->all();
 
         return compact('rows', 'categories');
     }
