@@ -149,6 +149,9 @@
                     <h3 class="text-lg font-semibold text-slate-950">Score sheet</h3>
                     <p class="mt-1 text-sm text-slate-500">Uncheck Has entry to exclude a participant from rankings, podium results, and non-podium points. Save a base score before entering a deduction.</p>
                     <p class="mt-1 text-xs text-slate-400">Tie ranking: {{ $event->tie_ranking_method->label() }}.</p>
+                    @if (! $competition->usesCriteriaScoring())
+                        <p class="mt-1 text-xs text-slate-500">Wins determine rank. Deductions reduce awarded rank points, not wins.</p>
+                    @endif
                     @if ($competition->usesCriteriaScoring() && $competition->judge_count > 1)
                         <p class="mt-1 text-xs text-slate-500">Each criterion uses the average of {{ $competition->judge_count }} judge scores. Rankings and deductions become available after every judge scores each criterion for a participant.</p>
                     @endif
@@ -200,7 +203,7 @@
                                 <th class="px-6 py-3.5 font-semibold">Total wins</th>
                             @endif
                             <th class="px-6 py-3.5 text-center font-semibold">Deduction</th>
-                            <th class="px-6 py-3.5 text-right font-semibold">Adjusted total</th>
+                            <th class="px-6 py-3.5 text-right font-semibold">{{ $competition->usesCriteriaScoring() ? 'Adjusted total' : 'Rank points after deduction' }}</th>
                         </tr>
                     </thead>
                     <tbody id="competition-score-rows" class="divide-y divide-slate-100">
@@ -280,13 +283,13 @@
                                 <td class="px-6 py-4 text-center">
                                     @if ($hasSavedScore && $result?->has_entry)
                                         @php($deductionField = "deductions.{$participant->id}")
-                                        <input form="deduction-form" name="deductions[{{ $participant->id }}]" type="number" min="0" max="{{ min($standing['gross_score'] ?? 0, 999999.99) }}" step="0.01" value="{{ old($deductionField, $result?->deduction ?? 0) }}" @disabled(! $canEditScores) class="h-10 w-28 rounded-lg border border-amber-300 bg-amber-50/50 px-3 text-center text-sm outline-none transition disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500 focus:border-amber-600 focus:ring-4 focus:ring-amber-600/10" aria-label="Deduction for {{ $participant->name }}">
+                                        <input form="deduction-form" name="deductions[{{ $participant->id }}]" type="number" min="0" max="{{ min($competition->usesCriteriaScoring() ? ($standing['gross_score'] ?? 0) : ($standing['rank_points'] ?? 0), 999999.99) }}" step="0.01" value="{{ old($deductionField, $result?->deduction ?? 0) }}" @disabled(! $canEditScores) class="h-10 w-28 rounded-lg border border-amber-300 bg-amber-50/50 px-3 text-center text-sm outline-none transition disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500 focus:border-amber-600 focus:ring-4 focus:ring-maroon-600/10" aria-label="Deduction for {{ $participant->name }}">
                                         @error($deductionField)<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                                     @else
                                         <span class="text-xs text-slate-400">{{ $result && ! $result->has_entry ? 'No entry' : 'Save score first' }}</span>
                                     @endif
                                 </td>
-                                <td class="px-6 py-4 text-right font-semibold text-slate-700">{{ $standing ? number_format($standing['raw_score'], 2) : ($result && ! $result->has_entry ? 'Excluded' : '—') }}</td>
+                                <td class="px-6 py-4 text-right font-semibold text-slate-700">{{ $standing ? number_format($competition->usesCriteriaScoring() ? $standing['raw_score'] : $standing['leaderboard_points'], 2) : ($result && ! $result->has_entry ? 'Excluded' : '—') }}</td>
                             </tr>
                         @endforeach
                     </tbody>

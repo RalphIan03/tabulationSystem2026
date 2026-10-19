@@ -21,6 +21,7 @@ final class LeaderboardCalculator
      *     deduction: float,
      *     raw_score: float,
      *     wins: ?int,
+     *     rank_points: float,
      *     leaderboard_points: float
      * }>
      */
@@ -57,8 +58,11 @@ final class LeaderboardCalculator
                     'rank' => 0,
                     'gross_score' => $grossScore,
                     'deduction' => $deduction,
-                    'raw_score' => max(0.0, $grossScore - $deduction),
+                    'raw_score' => $competition->usesCriteriaScoring()
+                        ? max(0.0, $grossScore - $deduction)
+                        : $grossScore,
                     'wins' => $wins,
+                    'rank_points' => 0.0,
                     'leaderboard_points' => 0.0,
                 ];
             })
@@ -91,9 +95,12 @@ final class LeaderboardCalculator
 
             $rankScore = $rankScores->get($rank);
             $row['rank'] = $rank;
-            $row['leaderboard_points'] = $rankScore === null
+            $row['rank_points'] = $rankScore === null
                 ? (float) $competition->non_podium_points
                 : (float) $rankScore->points;
+            $row['leaderboard_points'] = $competition->usesCriteriaScoring()
+                ? $row['rank_points']
+                : max(0.0, $row['rank_points'] - $row['deduction']);
             $previousScore = $row['raw_score'];
 
             return $row;

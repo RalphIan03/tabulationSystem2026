@@ -652,6 +652,73 @@ final class CompetitionScoringTest extends TestCase
         $this->assertSame(67.5, $standing['raw_score']);
     }
 
+    public function test_wins_deduction_reduces_rank_points_without_changing_rank_or_wins(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        $event = Event::factory()->create();
+        $alex = $event->participants()->create(['name' => 'Alex Santos']);
+        $brian = $event->participants()->create(['name' => 'Brian Cruz']);
+        $carlo = $event->participants()->create(['name' => 'Carlo Reyes']);
+        $category = $event->categories()->create(['name' => 'Sports']);
+        $competition = $category->competitions()->create([
+            'name' => 'Basketball',
+            'scoring_method' => CompetitionScoringMethod::Wins,
+            'non_podium_points' => 10,
+        ]);
+        $competition->rankScores()->createMany([
+            ['rank' => 1, 'points' => 50],
+            ['rank' => 2, 'points' => 25],
+        ]);
+        $competition->results()->createMany([
+            ['participant_id' => $alex->id, 'wins' => 3],
+            ['participant_id' => $brian->id, 'wins' => 2],
+            ['participant_id' => $carlo->id, 'wins' => 1],
+        ]);
+        $route = route('events.categories.competitions.deductions.update', [$event, $category, $competition]);
+
+        $this->actingAs($admin)
+            ->get(route('events.categories.competitions.scores.edit', [$event, $category, $competition]))
+            ->assertSee('Rank points after deduction')
+            ->assertSee('max="50"', false);
+
+        $this->actingAs($admin)->patch($route, [
+            'deductions' => [$alex->id => 30, $carlo->id => 5],
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('competition_results', [
+            'participant_id' => $alex->id,
+            'wins' => 3,
+            'deduction' => 30,
+        ]);
+
+        $standings = app(LeaderboardCalculator::class)->competitionStandings($competition->fresh());
+        $this->assertSame([$alex->id, $brian->id, $carlo->id], $standings->pluck('participant.id')->all());
+        $this->assertSame([1, 2, 3], $standings->pluck('rank')->all());
+        $this->assertSame([3.0, 2.0, 1.0], $standings->pluck('raw_score')->all());
+        $this->assertSame([50.0, 25.0, 10.0], $standings->pluck('rank_points')->all());
+        $this->assertSame([20.0, 25.0, 5.0], $standings->pluck('leaderboard_points')->all());
+
+        $overall = app(LeaderboardCalculator::class)->overallStandings($event->fresh());
+        $this->assertSame(20.0, $overall->firstWhere('participant.id', $alex->id)['leaderboard_points']);
+
+        $csv = $this->actingAs($admin)->get(route('events.results.download', $event));
+        $csv->assertOk();
+        $csvContent = $csv->streamedContent();
+        $this->assertStringContainsString('Wins,"Rank points",Deduction,"Leaderboard points"', $csvContent);
+        $this->assertStringContainsString('"Alex Santos",3,50,30,20', $csvContent);
+
+        $this->actingAs($admin)->patch($route, [
+            'deductions' => [$alex->id => 50],
+        ])->assertRedirect();
+        $this->assertSame(0.0, app(LeaderboardCalculator::class)
+            ->competitionStandings($competition->fresh())
+            ->firstWhere('participant.id', $alex->id)['leaderboard_points']);
+
+        $this->actingAs($admin)->patch($route, [
+            'deductions' => [$alex->id => 50.01],
+        ])->assertSessionHasErrors("deductions.{$alex->id}");
+    }
+
     public function test_admin_can_override_scores_and_deductions_after_finalization(): void
     {
         $admin = User::factory()->create(['role' => AccountRole::Admin]);
@@ -663,6 +730,7 @@ final class CompetitionScoringTest extends TestCase
             'scoring_method' => CompetitionScoringMethod::Wins,
             'scores_finalized_at' => now(),
         ]);
+        $competition->rankScores()->create(['rank' => 1, 'points' => 100]);
         $competition->results()->create([
             'participant_id' => $participant->id,
             'wins' => 4,

@@ -122,7 +122,7 @@ final class CompetitionScoreExportTest extends TestCase
         $competition->results()->create([
             'participant_id' => $participant->id,
             'wins' => 3,
-            'deduction' => 1,
+            'deduction' => 10,
         ]);
         $competition->results()->create([
             'participant_id' => $lowerParticipant->id,
@@ -148,12 +148,34 @@ final class CompetitionScoreExportTest extends TestCase
         $this->assertStringContainsString('Td (Participant) Tj ET', $content);
         $this->assertStringContainsString('Td (Wins) Tj ET', $content);
         $this->assertStringContainsString('Td (Deduction) Tj ET', $content);
+        $this->assertStringContainsString('Td (Rank points) Tj ET', $content);
         $this->assertStringContainsString('Alex Santos', $content);
         $this->assertTrue(strpos($content, '(Alex Santos)') < strpos($content, '(Aaron Low)'));
         $this->assertStringContainsString('Td (3.00) Tj ET', $content);
-        $this->assertStringContainsString('Td (1.00) Tj ET', $content);
-        $this->assertStringContainsString('Td (2.00) Tj ET', $content);
+        $this->assertStringContainsString('Td (10.00) Tj ET', $content);
+        $this->assertStringContainsString('Td (40.00) Tj ET', $content);
         $this->assertStringContainsString('Td (50.00) Tj ET', $content);
+
+        $excel = $this->actingAs($admin)->get(route('events.categories.competitions.scores.export', [
+            $event, $category, $competition, 'format' => 'xlsx',
+        ]));
+        $excel->assertOk()->assertDownload("scores-sports-meet-basketball-{$competition->id}.xlsx");
+        $temporaryPath = tempnam(sys_get_temp_dir(), 'test-wins-xlsx-');
+        $this->assertNotFalse($temporaryPath);
+
+        try {
+            file_put_contents($temporaryPath, $excel->getContent());
+            $archive = new ZipArchive;
+            $this->assertTrue($archive->open($temporaryPath));
+            $sheet = $archive->getFromName('xl/worksheets/sheet1.xml');
+            $archive->close();
+            $this->assertIsString($sheet);
+        } finally {
+            unlink($temporaryPath);
+        }
+
+        $this->assertStringContainsString('Rank points', $sheet);
+        $this->assertStringContainsString('<c r="F10"><v>50</v></c><c r="G10"><v>40</v></c>', $sheet);
     }
 
     public function test_criteria_pdf_displays_zero_scores_for_no_entry_on_one_landscape_page(): void

@@ -51,18 +51,29 @@ final class EventResultsExporter
                 $this->row($stream, []);
                 $this->row($stream, ['Category', $category->name, 'Contest', $competition->name]);
                 $this->row($stream, ['Score status', $competition->scoresAreFinalized() ? 'Finalized' : 'Not finalized']);
-                $this->row($stream, ['Rank', 'Participant', 'Gross score', 'Deduction', 'Final score', 'Wins', 'Leaderboard points']);
+                $this->row($stream, $competition->usesCriteriaScoring()
+                    ? ['Rank', 'Participant', 'Gross score', 'Deduction', 'Final score', 'Wins', 'Leaderboard points']
+                    : ['Rank', 'Participant', 'Wins', 'Rank points', 'Deduction', 'Leaderboard points']);
 
                 foreach ($this->leaderboard->competitionStandings($competition, $event) as $result) {
-                    $this->row($stream, [
-                        $result['rank'],
-                        $result['participant']->name,
-                        $result['gross_score'],
-                        $result['deduction'],
-                        $result['raw_score'],
-                        $result['wins'],
-                        $result['leaderboard_points'],
-                    ]);
+                    $this->row($stream, $competition->usesCriteriaScoring()
+                        ? [
+                            $result['rank'],
+                            $result['participant']->name,
+                            $result['gross_score'],
+                            $result['deduction'],
+                            $result['raw_score'],
+                            $result['wins'],
+                            $result['leaderboard_points'],
+                        ]
+                        : [
+                            $result['rank'],
+                            $result['participant']->name,
+                            $result['wins'],
+                            $result['rank_points'],
+                            $result['deduction'],
+                            $result['leaderboard_points'],
+                        ]);
                 }
             }
         }

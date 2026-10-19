@@ -7,6 +7,7 @@ namespace App\Http\Requests;
 use App\Models\Category;
 use App\Models\Competition;
 use App\Models\Event;
+use App\Services\LeaderboardCalculator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -27,7 +28,7 @@ final class UpdateCompetitionDeductionsRequest extends FormRequest
     }
 
     /** @return array<string, array<int, mixed>> */
-    public function rules(): array
+    public function rules(LeaderboardCalculator $leaderboard): array
     {
         $competition = $this->route('competition');
 
@@ -36,6 +37,10 @@ final class UpdateCompetitionDeductionsRequest extends FormRequest
         }
 
         $competition->loadMissing('criteria', 'results.criterionScores');
+        $rankPointsByParticipant = $competition->usesCriteriaScoring()
+            ? collect()
+            : $leaderboard->competitionStandings($competition)
+                ->keyBy(static fn (array $row): int => $row['participant']->getKey());
         $maximumDeductions = [];
 
         foreach ($competition->results as $result) {
@@ -45,7 +50,7 @@ final class UpdateCompetitionDeductionsRequest extends FormRequest
 
             $baseScore = $competition->usesCriteriaScoring()
                 ? $result->criteriaScoreSummary($competition)['gross']
-                : ($result->wins === null ? null : (float) $result->wins);
+                : ($rankPointsByParticipant->get($result->participant_id)['rank_points'] ?? null);
 
             if ($baseScore !== null) {
                 $maximumDeductions[(string) $result->participant_id] = min(
@@ -85,7 +90,7 @@ final class UpdateCompetitionDeductionsRequest extends FormRequest
     {
         return [
             'deductions.prohibited' => 'Save at least one participant score before entering deductions.',
-            'deductions.*.max' => 'A deduction cannot exceed the participant\'s saved base score.',
+            'deductions.*.max' => 'A deduction cannot exceed the participant\'s saved base score or awarded rank points.',
         ];
     }
 }

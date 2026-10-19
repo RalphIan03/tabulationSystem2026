@@ -103,7 +103,9 @@ final class CompetitionScoreExporter
                 'wins' => $hasNoEntry ? 0 : $result?->wins,
                 'gross' => $gross,
                 'deduction' => $deduction,
-                'adjusted' => $gross === null ? null : max(0.0, $gross - $deduction),
+                'adjusted' => $usesCriteria
+                    ? ($gross === null ? null : max(0.0, $gross - $deduction))
+                    : ($hasNoEntry ? 0.0 : ($standing['rank_points'] ?? null)),
                 'points' => $standing['leaderboard_points'] ?? null,
             ];
         }
@@ -227,7 +229,7 @@ final class CompetitionScoreExporter
             $headers[] = 'Wins';
         }
 
-        array_push($headers, 'Deduction', 'Adjusted total', 'Leaderboard points');
+        array_push($headers, 'Deduction', $report['uses_criteria'] ? 'Adjusted total' : 'Rank points', 'Leaderboard points');
         $summaryHeaderRow = $report['uses_criteria'] ? 10 : 9;
 
         $sheetRows = [
@@ -535,7 +537,7 @@ final class CompetitionScoreExporter
 
         if (! $usesCriteria || $criteria === []) {
             return [
-                ['Rank', 'Participant', 'Status', $usesCriteria ? 'Gross score' : 'Wins', 'Deduction', 'Adjusted total', 'Leaderboard points'],
+                ['Rank', 'Participant', 'Status', $usesCriteria ? 'Gross score' : 'Wins', 'Deduction', $usesCriteria ? 'Adjusted total' : 'Rank points', 'Leaderboard points'],
                 [38.0, 274.0, 78.0, 98.0, 98.0, 98.0, 98.0],
             ];
         }
