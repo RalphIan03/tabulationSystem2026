@@ -8,9 +8,12 @@ use App\Enums\CompetitionScoringMethod;
 use App\Models\Event;
 use App\Models\Participant;
 use App\Models\User;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Mockery;
 use Tests\TestCase;
 
 final class ParticipantAndContestConfigurationTest extends TestCase
@@ -37,6 +40,153 @@ final class ParticipantAndContestConfigurationTest extends TestCase
         $this->assertSame('Alex Santos', $participant->name);
         $this->assertNotNull($participant->profile_picture_path);
         Storage::disk('public')->assertExists($participant->profile_picture_path);
+    }
+
+    public function test_participant_picture_uses_database_when_public_disk_cannot_write(): void
+    {
+        $user = User::factory()->create();
+        $event = Event::factory()->for($user, 'creator')->create();
+        $image = UploadedFile::fake()->image('alex.png');
+        $expectedContents = file_get_contents($image->getRealPath());
+        $disk = Mockery::mock(FilesystemAdapter::class);
+        $disk->shouldReceive('putFile')->once()->andReturn(false);
+        Storage::shouldReceive('disk')->with('public')->andReturn($disk);
+
+        $this->actingAs($user)
+            ->post(route('events.participants.store', $event), [
+                'participant_name' => 'Alex Santos',
+                'participant_image' => $image,
+            ])
+            ->assertRedirect(route('events.show', $event))
+            ->assertSessionHasNoErrors();
+
+        $participant = Participant::query()->sole();
+        $imageId = substr($participant->profile_picture_path, strlen('database:'));
+        $this->assertSame('database:'.$imageId, $participant->profile_picture_path);
+        $this->assertDatabaseHas('participant_images', [
+            'id' => $imageId,
+            'event_id' => $event->id,
+            'mime_type' => 'image/png',
+        ]);
+        $this->get(route('events.show', $event))
+            ->assertSee(route('participant-images.show', $imageId, false));
+        $this->get(route('participant-images.show', $imageId))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/png')
+            ->assertSee($expectedContents, false);
+    }
+
+    public function test_replacing_database_backed_picture_removes_the_previous_image(): void
+    {
+        $user = User::factory()->create();
+        $event = Event::factory()->for($user, 'creator')->create();
+        $disk = Mockery::mock(FilesystemAdapter::class);
+        $disk->shouldReceive('putFile')->twice()->andReturn(false);
+        Storage::shouldReceive('disk')->with('public')->andReturn($disk);
+
+        $this->actingAs($user)
+            ->post(route('events.participants.store', $event), [
+                'participant_name' => 'Alex Santos',
+                'participant_image' => UploadedFile::fake()->image('first.png'),
+            ])
+            ->assertRedirect();
+
+        $participant = Participant::query()->sole();
+        $firstImageId = substr($participant->profile_picture_path, strlen('database:'));
+
+        $this->patch(route('events.participants.update', [$event, $participant]), [
+            'participant_name' => 'Alex Updated',
+            'participant_image' => UploadedFile::fake()->image('second.jpg'),
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $participant->refresh();
+        $secondImageId = substr($participant->profile_picture_path, strlen('database:'));
+        $this->assertSame('Alex Updated', $participant->name);
+        $this->assertNotSame($firstImageId, $secondImageId);
+        $this->assertDatabaseCount('participant_images', 1);
+        $this->get(route('participant-images.show', $firstImageId))->assertNotFound();
+        $this->get(route('participant-images.show', $secondImageId))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/jpeg');
+    }
+
+    public function test_replacing_legacy_picture_succeeds_when_read_only_disk_cannot_delete_it(): void
+    {
+        $user = User::factory()->create();
+        $event = Event::factory()->for($user, 'creator')->create();
+        $participant = $event->participants()->create([
+            'name' => 'Alex Santos',
+            'profile_picture_path' => "participants/{$event->id}/old.jpg",
+        ]);
+        $disk = Mockery::mock(FilesystemAdapter::class);
+        $disk->shouldReceive('putFile')->once()->andReturn(false);
+        $disk->shouldReceive('delete')->once()->andThrow(new \RuntimeException('Read-only disk'));
+        Storage::shouldReceive('disk')->with('public')->andReturn($disk);
+
+        $this->actingAs($user)
+            ->patch(route('events.participants.update', [$event, $participant]), [
+                'participant_name' => 'Alex Updated',
+                'participant_image' => UploadedFile::fake()->image('replacement.png'),
+            ])
+            ->assertRedirect(route('events.show', $event))
+            ->assertSessionHasNoErrors();
+
+        $participant->refresh();
+        $this->assertSame('Alex Updated', $participant->name);
+        $this->assertStringStartsWith('database:', $participant->profile_picture_path);
+        $this->assertDatabaseCount('participant_images', 1);
+    }
+
+    public function test_oversized_picture_uses_database_after_compression_when_disk_cannot_write(): void
+    {
+        $user = User::factory()->create();
+        $event = Event::factory()->for($user, 'creator')->create();
+        $disk = Mockery::mock(FilesystemAdapter::class);
+        $disk->shouldReceive('put')->once()->andThrow(new \RuntimeException('Read-only disk'));
+        Storage::shouldReceive('disk')->with('public')->andReturn($disk);
+
+        $this->actingAs($user)
+            ->post(route('events.participants.store', $event), [
+                'participant_name' => 'Large Image',
+                'participant_image' => UploadedFile::fake()->image('large.png', 1200, 900)->size(3072),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $participant = Participant::query()->sole();
+        $imageId = substr($participant->profile_picture_path, strlen('database:'));
+        $stored = DB::table('participant_images')->find($imageId);
+        $this->assertNotNull($stored);
+        $this->assertLessThanOrEqual(2048 * 1024, strlen(base64_decode($stored->contents, true)));
+        $this->get(route('participant-images.show', $imageId))
+            ->assertOk()
+            ->assertHeader('Content-Type', $stored->mime_type);
+    }
+
+    public function test_deleting_participant_removes_database_backed_picture(): void
+    {
+        $user = User::factory()->create();
+        $event = Event::factory()->for($user, 'creator')->create();
+        $disk = Mockery::mock(FilesystemAdapter::class);
+        $disk->shouldReceive('putFile')->once()->andReturn(false);
+        Storage::shouldReceive('disk')->with('public')->andReturn($disk);
+
+        $this->actingAs($user)
+            ->post(route('events.participants.store', $event), [
+                'participant_name' => 'Alex Santos',
+                'participant_image' => UploadedFile::fake()->image('alex.jpg'),
+            ])
+            ->assertRedirect();
+
+        $participant = Participant::query()->sole();
+        $imageId = substr($participant->profile_picture_path, strlen('database:'));
+
+        $this->delete(route('events.participants.destroy', [$event, $participant]))
+            ->assertRedirect(route('events.show', $event));
+
+        $this->assertModelMissing($participant);
+        $this->assertDatabaseCount('participant_images', 0);
+        $this->get(route('participant-images.show', $imageId))->assertNotFound();
     }
 
     public function test_oversized_participant_picture_is_compressed_before_storage(): void

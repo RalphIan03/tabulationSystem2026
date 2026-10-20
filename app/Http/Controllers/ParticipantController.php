@@ -11,7 +11,6 @@ use App\Models\Participant;
 use App\Services\ParticipantImageStorage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -37,7 +36,7 @@ final class ParticipantController extends Controller
             ]);
         } catch (Throwable $exception) {
             if (is_string($profilePicturePath)) {
-                Storage::disk('public')->delete($profilePicturePath);
+                $images->delete($profilePicturePath);
             }
 
             throw $exception;
@@ -74,7 +73,7 @@ final class ParticipantController extends Controller
             ]);
         } catch (Throwable $exception) {
             if (is_string($newProfilePicturePath)) {
-                Storage::disk('public')->delete($newProfilePicturePath);
+                $images->delete($newProfilePicturePath);
             }
 
             throw $exception;
@@ -84,15 +83,19 @@ final class ParticipantController extends Controller
             is_string($oldProfilePicturePath)
             && $oldProfilePicturePath !== $profilePicturePath
         ) {
-            Storage::disk('public')->delete($oldProfilePicturePath);
+            $images->delete($oldProfilePicturePath);
         }
 
         return to_route('events.show', $event)
             ->with('status', 'Participant updated successfully.');
     }
 
-    public function destroy(Request $request, Event $event, Participant $participant): RedirectResponse
-    {
+    public function destroy(
+        Request $request,
+        Event $event,
+        Participant $participant,
+        ParticipantImageStorage $images,
+    ): RedirectResponse {
         if ($participant->childTeams()->exists()) {
             throw ValidationException::withMessages([
                 'participant' => 'Reassign or remove this team\'s subteams before deleting it.',
@@ -110,7 +113,7 @@ final class ParticipantController extends Controller
         $participant->delete();
 
         if (is_string($profilePicturePath)) {
-            Storage::disk('public')->delete($profilePicturePath);
+            $images->delete($profilePicturePath);
         }
 
         return to_route('events.show', $event)

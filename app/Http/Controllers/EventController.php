@@ -10,6 +10,7 @@ use App\Http\Requests\StoreEventRequest;
 use App\Http\Requests\UpdateEventDetailsRequest;
 use App\Http\Requests\UpdateEventTieRankingRequest;
 use App\Models\Event;
+use App\Services\ParticipantImageStorage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -62,7 +63,7 @@ final class EventController extends Controller
             ->with('status', 'Event created successfully.');
     }
 
-    public function show(Request $request, Event $event): View
+    public function show(Request $request, Event $event, ParticipantImageStorage $participantImages): View
     {
         if ($event->isArchived()) {
             $event->load([
@@ -117,6 +118,7 @@ final class EventController extends Controller
             'tieRankingMethods' => TieRankingMethod::cases(),
             'canEditTieRanking' => ! $hasFinalizedCompetitions || $request->user()->isAdmin(),
             'lockedParticipantIds' => $lockedParticipantIds,
+            'participantImages' => $participantImages,
         ]);
     }
 

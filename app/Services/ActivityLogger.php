@@ -32,7 +32,7 @@ final class ActivityLogger
         'events.categories.competitions.scoring-method.update' => 'Changed a contest scoring method',
         'events.categories.competitions.judge-count.update' => 'Changed the number of contest judges',
         'events.categories.competitions.scores.update' => 'Updated participant contest scores',
-        'events.categories.competitions.scores.exclude-linked' => 'Batch excluded linked contestants from a contest',
+        'events.competition-scores.exclude-linked' => 'Excluded linked participants from selected contests',
         'events.categories.competitions.scores.import' => 'Imported participant contest scores from Excel',
         'events.categories.competitions.deductions.update' => 'Updated participant score deductions',
         'events.categories.competitions.scores.finalization.update' => 'Changed contest score finalization',

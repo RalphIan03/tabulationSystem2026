@@ -7,37 +7,104 @@ namespace App\Services;
 use App\Models\Event;
 use GdImage;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use RuntimeException;
+use Throwable;
 
 final class ParticipantImageStorage
 {
     private const MAX_STORED_BYTES = 2048 * 1024;
+
+    private const DATABASE_PREFIX = 'database:';
 
     public function store(UploadedFile $file, Event $event): string
     {
         $directory = "participants/{$event->getKey()}";
 
         if ($file->getSize() <= self::MAX_STORED_BYTES) {
-            $path = $file->store($directory, 'public');
+            try {
+                $path = Storage::disk('public')->putFile($directory, $file);
 
-            if ($path === false) {
-                throw new RuntimeException('The participant profile picture could not be stored.');
+                if (is_string($path)) {
+                    return $path;
+                }
+            } catch (Throwable) {
+                // A read-only local disk is expected on some deployments.
             }
 
-            return $path;
+            $contents = file_get_contents($file->getRealPath());
+
+            if ($contents === false) {
+                throw ValidationException::withMessages([
+                    'participant_image' => 'The profile picture could not be read. Please try another image.',
+                ]);
+            }
+
+            $mimeType = $file->getMimeType();
+
+            if (! in_array($mimeType, ['image/jpeg', 'image/png', 'image/webp'], true)) {
+                throw ValidationException::withMessages([
+                    'participant_image' => 'The profile picture must be a JPG, PNG, or WebP image.',
+                ]);
+            }
+
+            return $this->storeInDatabase($event, $contents, $mimeType);
         }
 
         [$contents, $extension] = $this->compress($file);
         $path = $directory.'/'.Str::random(40).'.'.$extension;
 
-        if (! Storage::disk('public')->put($path, $contents)) {
-            throw new RuntimeException('The participant profile picture could not be stored.');
+        try {
+            if (Storage::disk('public')->put($path, $contents)) {
+                return $path;
+            }
+        } catch (Throwable) {
+            // A read-only local disk is expected on some deployments.
         }
 
-        return $path;
+        return $this->storeInDatabase($event, $contents, $extension === 'webp' ? 'image/webp' : 'image/jpeg');
+    }
+
+    public function url(string $path): string
+    {
+        if (str_starts_with($path, self::DATABASE_PREFIX)) {
+            return route('participant-images.show', substr($path, strlen(self::DATABASE_PREFIX)), false);
+        }
+
+        return Storage::disk('public')->url($path);
+    }
+
+    public function delete(string $path): void
+    {
+        if (str_starts_with($path, self::DATABASE_PREFIX)) {
+            DB::table('participant_images')->where('id', substr($path, strlen(self::DATABASE_PREFIX)))->delete();
+
+            return;
+        }
+
+        try {
+            Storage::disk('public')->delete($path);
+        } catch (Throwable) {
+            // The legacy file may be on a read-only deployment filesystem.
+        }
+    }
+
+    private function storeInDatabase(Event $event, string $contents, string $mimeType): string
+    {
+        $id = (string) Str::uuid();
+
+        DB::table('participant_images')->insert([
+            'id' => $id,
+            'event_id' => $event->getKey(),
+            'mime_type' => $mimeType,
+            'contents' => base64_encode($contents),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return self::DATABASE_PREFIX.$id;
     }
 
     /** @return array{string, string} */

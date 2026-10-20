@@ -888,125 +888,147 @@ final class CompetitionScoringTest extends TestCase
             ], false);
     }
 
-    public function test_admin_can_batch_exclude_only_selected_linked_contestants_without_erasing_their_scores(): void
+    public function test_admin_can_exclude_all_linked_participants_from_selected_contests_in_one_batch(): void
     {
         $admin = User::factory()->create(['role' => AccountRole::Admin]);
         $event = Event::factory()->create();
-        $teamA = $event->participants()->create(['name' => 'TEAM A']);
-        $teamA2 = $event->participants()->create(['name' => 'TEAM A2', 'parent_participant_id' => $teamA->id]);
-        $teamA3 = $event->participants()->create(['name' => 'TEAM A3', 'parent_participant_id' => $teamA->id]);
-        $teamB = $event->participants()->create(['name' => 'TEAM B']);
-        $teamB2 = $event->participants()->create(['name' => 'TEAM B2', 'parent_participant_id' => $teamB->id]);
+        $mainTeam = $event->participants()->create(['name' => 'TEAM A']);
+        $linkedOne = $event->participants()->create(['name' => 'TEAM A2', 'parent_participant_id' => $mainTeam->id]);
+        $linkedTwo = $event->participants()->create(['name' => 'TEAM A3', 'parent_participant_id' => $mainTeam->id]);
         $category = $event->categories()->create(['name' => 'Arts']);
-        $competition = $category->competitions()->create(['name' => 'Dance', 'scores_finalized_at' => now()]);
-        $criterion = $competition->criteria()->create(['name' => 'Technique', 'max_score' => 100]);
-        $selectedResult = $competition->results()->create(['participant_id' => $teamA2->id, 'deduction' => 5]);
-        $selectedScore = $selectedResult->criterionScores()->create(['criterion_id' => $criterion->id, 'score' => 80]);
-        $otherResult = $competition->results()->create(['participant_id' => $teamB2->id]);
-        $otherResult->criterionScores()->create(['criterion_id' => $criterion->id, 'score' => 70]);
-        $otherContest = $category->competitions()->create(['name' => 'Singing']);
-        $otherContest->results()->create(['participant_id' => $teamA2->id, 'wins' => 2]);
-        $routeParameters = [$event, $category, $competition];
+        $criteriaContest = $category->competitions()->create(['name' => 'Dance', 'scores_finalized_at' => now()]);
+        $criterion = $criteriaContest->criteria()->create(['name' => 'Technique', 'max_score' => 100]);
+        $criteriaResult = $criteriaContest->results()->create(['participant_id' => $linkedOne->id, 'deduction' => 5]);
+        $criterionScore = $criteriaResult->criterionScores()->create(['criterion_id' => $criterion->id, 'score' => 80]);
+        $sportsCategory = $event->categories()->create(['name' => 'Sports']);
+        $winsContest = $sportsCategory->competitions()->create([
+            'name' => 'Basketball',
+            'scoring_method' => CompetitionScoringMethod::Wins,
+        ]);
+        $winsResult = $winsContest->results()->create(['participant_id' => $linkedTwo->id, 'wins' => 4, 'deduction' => 2]);
+        $mainResult = $winsContest->results()->create(['participant_id' => $mainTeam->id, 'wins' => 5]);
+        $unselectedContest = $category->competitions()->create(['name' => 'Singing']);
+        $unselectedResult = $unselectedContest->results()->create(['participant_id' => $linkedOne->id]);
 
         $this->actingAs($admin)
-            ->get(route('events.categories.competitions.scores.edit', $routeParameters))
-            ->assertSee('Batch exclude linked contestants')
-            ->assertSee('name="participant_ids[]"', false);
+            ->get(route('events.show', $event))
+            ->assertSee('Select all contests')
+            ->assertSee('Exclude linked from selected')
+            ->assertSee('formaction="'.route('events.competition-scores.exclude-linked', $event, false).'"', false)
+            ->assertSee('name="competition_ids[]"', false);
+        $this->actingAs($admin)
+            ->get(route('events.categories.competitions.scores.edit', [$event, $category, $criteriaContest]))
+            ->assertDontSee('Batch exclude linked contestants');
 
         $this->actingAs($admin)
-            ->patch(route('events.categories.competitions.scores.exclude-linked', $routeParameters), [
-                'participant_ids' => [$teamA2->id, $teamA3->id],
+            ->patch(route('events.competition-scores.exclude-linked', $event), [
+                'competition_ids' => [$criteriaContest->id, $winsContest->id],
             ])
-            ->assertRedirect(route('events.categories.competitions.scores.edit', $routeParameters))
+            ->assertRedirect(route('events.show', $event))
             ->assertSessionHasNoErrors()
-            ->assertSessionHas('status', '2 linked contestants excluded from this contest.');
+            ->assertSessionHas('status', 'Linked participants excluded from 2 selected contests.');
 
-        $this->assertFalse($selectedResult->refresh()->has_entry);
-        $this->assertSame('5.00', $selectedResult->deduction);
-        $this->assertModelExists($selectedScore);
-        $this->assertTrue($otherResult->refresh()->has_entry);
-        $this->assertTrue($competition->refresh()->scoresAreFinalized());
-        $this->assertSame([$teamB2->id], app(LeaderboardCalculator::class)
-            ->competitionStandings($competition)->pluck('participant.id')->all());
+        $this->assertFalse($criteriaResult->refresh()->has_entry);
+        $this->assertSame('5.00', $criteriaResult->deduction);
+        $this->assertModelExists($criterionScore);
+        $this->assertFalse($winsResult->refresh()->has_entry);
+        $this->assertSame(4, $winsResult->wins);
+        $this->assertSame('2.00', $winsResult->deduction);
+        $this->assertTrue($mainResult->refresh()->has_entry);
+        $this->assertTrue($unselectedResult->refresh()->has_entry);
+        $this->assertTrue($criteriaContest->refresh()->scoresAreFinalized());
         $this->assertDatabaseHas('competition_results', [
-            'competition_id' => $competition->id,
-            'participant_id' => $teamA3->id,
+            'competition_id' => $criteriaContest->id,
+            'participant_id' => $linkedTwo->id,
             'has_entry' => false,
         ]);
         $this->assertDatabaseHas('competition_results', [
-            'competition_id' => $otherContest->id,
-            'participant_id' => $teamA2->id,
-            'has_entry' => true,
+            'competition_id' => $winsContest->id,
+            'participant_id' => $linkedOne->id,
+            'has_entry' => false,
         ]);
-        $this->assertDatabaseMissing('competition_results', [
-            'competition_id' => $competition->id,
-            'participant_id' => $teamA->id,
+        $this->assertSame([$mainTeam->id], app(LeaderboardCalculator::class)
+            ->competitionStandings($winsContest)->pluck('participant.id')->all());
+        $this->assertDatabaseHas('activity_logs', [
+            'route_name' => 'events.competition-scores.exclude-linked',
+            'description' => 'Excluded linked participants from selected contests',
         ]);
     }
 
-    public function test_batch_exclusion_requires_admin_and_valid_linked_contestants_from_the_same_event(): void
+    public function test_admin_can_exclude_linked_participants_from_a_single_selected_contest(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        $event = Event::factory()->create();
+        $mainTeam = $event->participants()->create(['name' => 'Main team']);
+        $linkedTeam = $event->participants()->create(['name' => 'Linked team', 'parent_participant_id' => $mainTeam->id]);
+        $category = $event->categories()->create(['name' => 'Sports']);
+        $competition = $category->competitions()->create(['name' => 'Relay']);
+
+        $this->actingAs($admin)
+            ->patch(route('events.competition-scores.exclude-linked', $event), [
+                'competition_ids' => [$competition->id],
+            ])
+            ->assertRedirect(route('events.show', $event))
+            ->assertSessionHas('status', 'Linked participants excluded from 1 selected contest.');
+
+        $this->assertDatabaseHas('competition_results', [
+            'competition_id' => $competition->id,
+            'participant_id' => $linkedTeam->id,
+            'has_entry' => false,
+        ]);
+    }
+
+    public function test_event_batch_exclusion_rejects_auditors_and_invalid_contest_selections(): void
     {
         $admin = User::factory()->create(['role' => AccountRole::Admin]);
         $auditor = User::factory()->create(['role' => AccountRole::Auditor]);
         $event = Event::factory()->create();
         $mainTeam = $event->participants()->create(['name' => 'Main team']);
-        $linkedTeam = $event->participants()->create(['name' => 'Linked team', 'parent_participant_id' => $mainTeam->id]);
-        $otherEvent = Event::factory()->create();
-        $otherMain = $otherEvent->participants()->create(['name' => 'Other main']);
-        $otherLinked = $otherEvent->participants()->create(['name' => 'Other linked', 'parent_participant_id' => $otherMain->id]);
+        $event->participants()->create(['name' => 'Linked team', 'parent_participant_id' => $mainTeam->id]);
         $category = $event->categories()->create(['name' => 'Sports']);
         $competition = $category->competitions()->create(['name' => 'Relay']);
-        $routeParameters = [$event, $category, $competition];
+        $otherEvent = Event::factory()->create();
+        $otherCategory = $otherEvent->categories()->create(['name' => 'Other category']);
+        $otherCompetition = $otherCategory->competitions()->create(['name' => 'Other contest']);
 
         $this->actingAs($auditor)
-            ->get(route('events.categories.competitions.scores.edit', $routeParameters))
-            ->assertDontSee('Batch exclude linked contestants');
+            ->get(route('events.show', $event))
+            ->assertDontSee('Exclude linked from selected');
         $this->actingAs($auditor)
-            ->patch(route('events.categories.competitions.scores.exclude-linked', $routeParameters), [
-                'participant_ids' => [$linkedTeam->id],
+            ->patch(route('events.competition-scores.exclude-linked', $event), [
+                'competition_ids' => [$competition->id],
             ])->assertForbidden();
 
         $this->actingAs($admin)
-            ->patch(route('events.categories.competitions.scores.exclude-linked', $routeParameters), [])
-            ->assertSessionHasErrors('participant_ids');
+            ->patch(route('events.competition-scores.exclude-linked', $event), [])
+            ->assertSessionHasErrors('competition_ids');
         $this->actingAs($admin)
-            ->patch(route('events.categories.competitions.scores.exclude-linked', $routeParameters), [
-                'participant_ids' => [$mainTeam->id, $otherLinked->id],
-            ])->assertSessionHasErrors(['participant_ids.0', 'participant_ids.1']);
+            ->patch(route('events.competition-scores.exclude-linked', $event), [
+                'competition_ids' => [$competition->id, $otherCompetition->id],
+            ])->assertSessionHasErrors('competition_ids.1');
         $this->actingAs($admin)
-            ->patch(route('events.categories.competitions.scores.exclude-linked', $routeParameters), [
-                'participant_ids' => [$linkedTeam->id, $linkedTeam->id],
-            ])->assertSessionHasErrors('participant_ids.0');
+            ->patch(route('events.competition-scores.exclude-linked', $event), [
+                'competition_ids' => [$competition->id, $competition->id],
+            ])->assertSessionHasErrors('competition_ids.0');
 
         $this->assertDatabaseCount('competition_results', 0);
     }
 
-    public function test_batch_exclusion_keeps_saved_wins_for_later_reentry(): void
+    public function test_event_batch_exclusion_requires_linked_participants(): void
     {
         $admin = User::factory()->create(['role' => AccountRole::Admin]);
         $event = Event::factory()->create();
-        $mainTeam = $event->participants()->create(['name' => 'Main team']);
-        $linkedTeam = $event->participants()->create(['name' => 'Linked team', 'parent_participant_id' => $mainTeam->id]);
+        $event->participants()->create(['name' => 'Main team']);
         $category = $event->categories()->create(['name' => 'Sports']);
-        $competition = $category->competitions()->create([
-            'name' => 'Basketball',
-            'scoring_method' => CompetitionScoringMethod::Wins,
-        ]);
-        $result = $competition->results()->create([
-            'participant_id' => $linkedTeam->id,
-            'wins' => 4,
-            'deduction' => 2,
-        ]);
+        $competition = $category->competitions()->create(['name' => 'Relay']);
 
         $this->actingAs($admin)
-            ->patch(route('events.categories.competitions.scores.exclude-linked', [$event, $category, $competition]), [
-                'participant_ids' => [$linkedTeam->id],
-            ])->assertRedirect();
+            ->patch(route('events.competition-scores.exclude-linked', $event), [
+                'competition_ids' => [$competition->id],
+            ])
+            ->assertSessionHasErrors('competition_ids');
 
-        $this->assertFalse($result->refresh()->has_entry);
-        $this->assertSame(4, $result->wins);
-        $this->assertSame('2.00', $result->deduction);
-        $this->assertSame([], app(LeaderboardCalculator::class)->competitionStandings($competition)->all());
+        $this->assertDatabaseCount('competition_results', 0);
     }
 
     public function test_bulk_subteam_exclusion_clears_saved_wins_without_affecting_main_teams(): void

@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
-use App\Models\Category;
 use App\Models\Competition;
 use App\Models\Event;
-use App\Models\Participant;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -15,16 +13,8 @@ final class BatchExcludeLinkedContestantsRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $event = $this->route('event');
-        $category = $this->route('category');
-        $competition = $this->route('competition');
-
         return $this->user()?->isAdmin() === true
-            && $event instanceof Event
-            && $category instanceof Category
-            && $competition instanceof Competition
-            && (string) $category->event_id === (string) $event->getKey()
-            && (string) $competition->category_id === (string) $category->getKey();
+            && $this->route('event') instanceof Event;
     }
 
     /** @return array<string, array<int, mixed>> */
@@ -33,14 +23,13 @@ final class BatchExcludeLinkedContestantsRequest extends FormRequest
         $event = $this->route('event');
 
         return [
-            'participant_ids' => ['required', 'array', 'min:1'],
-            'participant_ids.*' => [
+            'competition_ids' => ['required', 'array', 'min:1'],
+            'competition_ids.*' => [
                 'required',
                 'integer',
                 'distinct',
-                Rule::exists(Participant::class, 'id')
-                    ->where('event_id', $event?->getKey())
-                    ->whereNotNull('parent_participant_id'),
+                Rule::exists(Competition::class, 'id')
+                    ->whereIn('category_id', $event->categories()->pluck('id')),
             ],
         ];
     }
@@ -49,9 +38,9 @@ final class BatchExcludeLinkedContestantsRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'participant_ids.required' => 'Select at least one linked contestant to exclude.',
-            'participant_ids.min' => 'Select at least one linked contestant to exclude.',
-            'participant_ids.*.exists' => 'Only linked contestants from this event can be excluded.',
+            'competition_ids.required' => 'Select at least one contest to exclude linked participants from.',
+            'competition_ids.min' => 'Select at least one contest to exclude linked participants from.',
+            'competition_ids.*.exists' => 'Every selected contest must belong to this event.',
         ];
     }
 }

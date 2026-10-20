@@ -18,8 +18,10 @@ use App\Services\CompetitionManager;
 use App\Services\CompetitionScoreManager;
 use App\Services\CompetitionScoreWorkbook;
 use App\Services\LeaderboardCalculator;
+use App\Services\ParticipantImageStorage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Response;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 final class CompetitionScoreController extends Controller
@@ -35,6 +37,7 @@ final class CompetitionScoreController extends Controller
         Event $event,
         Category $category,
         Competition $competition,
+        ParticipantImageStorage $participantImages,
     ): View {
         $event->load([
             'participants' => fn ($query) => $query->orderBy('name'),
@@ -61,6 +64,7 @@ final class CompetitionScoreController extends Controller
             'scoreParticipants' => $scoreParticipants,
             'standings' => $this->leaderboard->competitionStandings($competition, $event),
             'criterionStandings' => $this->leaderboard->criterionStandings($competition, $event),
+            'participantImages' => $participantImages,
         ]);
     }
 
@@ -115,19 +119,23 @@ final class CompetitionScoreController extends Controller
     public function excludeLinkedContestants(
         BatchExcludeLinkedContestantsRequest $request,
         Event $event,
-        Category $category,
-        Competition $competition,
     ): RedirectResponse {
-        $participants = $event->participants()
-            ->whereNotNull('parent_participant_id')
-            ->whereIn('id', $request->validated('participant_ids'))
+        $ids = $request->validated('competition_ids');
+        $competitions = $event->competitions()
+            ->whereKey($ids)
             ->get();
 
-        $count = $this->scoreManager->excludeLinkedContestants($competition, $participants);
-        $label = $count === 1 ? 'contestant' : 'contestants';
+        if ($competitions->count() !== count($ids)) {
+            throw ValidationException::withMessages([
+                'competition_ids' => 'Every selected contest must belong to this event.',
+            ]);
+        }
 
-        return to_route('events.categories.competitions.scores.edit', [$event, $category, $competition])
-            ->with('status', "{$count} linked {$label} excluded from this contest.");
+        $count = $this->scoreManager->excludeLinkedContestants($event, $competitions);
+        $label = $count === 1 ? 'contest' : 'contests';
+
+        return to_route('events.show', $event)
+            ->with('status', "Linked participants excluded from {$count} selected {$label}.");
     }
 
     public function updateFinalization(

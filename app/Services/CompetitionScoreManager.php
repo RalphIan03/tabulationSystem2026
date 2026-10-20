@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Models\Competition;
 use App\Models\CompetitionResult;
+use App\Models\Event;
 use App\Models\Participant;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -60,25 +61,37 @@ final class CompetitionScoreManager
         $this->invalidateLeaderboard($competition);
     }
 
-    /** @param Collection<int, Participant> $participants */
-    public function excludeLinkedContestants(Competition $competition, Collection $participants): int
+    /** @param Collection<int, Competition> $competitions */
+    public function excludeLinkedContestants(Event $event, Collection $competitions): int
     {
-        DB::transaction(function () use ($competition, $participants): void {
-            foreach ($participants as $participant) {
-                $result = $competition->results()->firstOrCreate(
-                    ['participant_id' => $participant->getKey()],
-                    ['has_entry' => false],
-                );
+        $linkedParticipantIds = $event->participants()
+            ->whereNotNull('parent_participant_id')
+            ->pluck('id');
 
-                if ($result->has_entry) {
-                    $result->update(['has_entry' => false]);
+        if ($linkedParticipantIds->isEmpty()) {
+            throw ValidationException::withMessages([
+                'competition_ids' => 'This event has no linked participants to exclude.',
+            ]);
+        }
+
+        DB::transaction(function () use ($competitions, $linkedParticipantIds): void {
+            foreach ($competitions as $competition) {
+                foreach ($linkedParticipantIds as $participantId) {
+                    $result = $competition->results()->firstOrCreate(
+                        ['participant_id' => $participantId],
+                        ['has_entry' => false],
+                    );
+
+                    if ($result->has_entry) {
+                        $result->update(['has_entry' => false]);
+                    }
                 }
             }
         });
 
-        $this->invalidateLeaderboard($competition);
+        $this->cache->invalidateLeaderboard((int) $event->getKey());
 
-        return $participants->count();
+        return $competitions->count();
     }
 
     /** @param array<int|string, mixed> $deductions */

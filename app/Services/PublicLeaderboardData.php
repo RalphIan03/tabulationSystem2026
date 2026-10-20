@@ -7,7 +7,6 @@ namespace App\Services;
 use App\Models\Competition;
 use App\Models\Event;
 use App\Models\Participant;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 final class PublicLeaderboardData
@@ -15,6 +14,7 @@ final class PublicLeaderboardData
     public function __construct(
         private readonly LeaderboardCalculator $calculator,
         private readonly EventReadCache $cache,
+        private readonly ParticipantImageStorage $images,
     ) {}
 
     /** @return array{rows: array<int, array<string, mixed>>, categories: array<int, array<string, mixed>>, win_categories: array<int, array{id: int, name: string}>} */
@@ -177,7 +177,7 @@ final class PublicLeaderboardData
             'name' => $participant->name,
             'profile_image_url' => $participant->profile_picture_path === null
                 ? null
-                : Storage::disk('public')->url($participant->profile_picture_path),
+                : $this->images->url($participant->profile_picture_path),
         ];
     }
 }

@@ -16,12 +16,16 @@ use App\Http\Controllers\EventController;
 use App\Http\Controllers\EventLeaderboardController;
 use App\Http\Controllers\EventResultsDownloadController;
 use App\Http\Controllers\ParticipantController;
+use App\Http\Controllers\ParticipantImageController;
 use App\Http\Controllers\PublicLeaderboardController;
 use App\Http\Controllers\RankScoreController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/login');
+
+Route::get('/participant-images/{image}', [ParticipantImageController::class, 'show'])
+    ->whereUuid('image')->name('participant-images.show');
 
 Route::get('/leaderboards', [PublicLeaderboardController::class, 'index'])
     ->name('leaderboards.index');
@@ -68,6 +72,8 @@ Route::middleware(['auth', 'active', 'credentials-updated', 'visible-event', 'ar
             ->name('events.leaderboard-freeze');
         Route::patch('/events/{event}/competition-scores/reset', [CompetitionScoreController::class, 'reset'])
             ->name('events.competition-scores.reset');
+        Route::patch('/events/{event}/competition-scores/exclude-linked', [CompetitionScoreController::class, 'excludeLinkedContestants'])
+            ->name('events.competition-scores.exclude-linked');
         Route::get('/logs', [ActivityLogController::class, 'index'])->name('logs.index');
         Route::get('/logs/download', [ActivityLogController::class, 'download'])
             ->name('logs.download');
@@ -131,10 +137,6 @@ Route::middleware(['auth', 'active', 'credentials-updated', 'visible-event', 'ar
             '/events/{event}/categories/{category}/competitions/{competition}/scores',
             [CompetitionScoreController::class, 'update'],
         )->name('events.categories.competitions.scores.update');
-        Route::patch(
-            '/events/{event}/categories/{category}/competitions/{competition}/scores/exclude-linked',
-            [CompetitionScoreController::class, 'excludeLinkedContestants'],
-        )->middleware('admin')->name('events.categories.competitions.scores.exclude-linked');
         Route::patch(
             '/events/{event}/categories/{category}/competitions/{competition}/deductions',
             [CompetitionScoreController::class, 'updateDeductions'],

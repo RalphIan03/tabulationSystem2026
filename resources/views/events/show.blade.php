@@ -228,7 +228,7 @@
                     <article class="px-5 py-5">
                         <div class="flex items-start gap-3">
                             @if ($participant->profile_picture_path)
-                                <img src="{{ Storage::disk('public')->url($participant->profile_picture_path) }}" alt="{{ $participant->name }}" class="h-12 w-12 shrink-0 rounded-full object-cover ring-2 ring-slate-100">
+                                <img src="{{ $participantImages->url($participant->profile_picture_path) }}" alt="{{ $participant->name }}" class="h-12 w-12 shrink-0 rounded-full object-cover ring-2 ring-slate-100">
                             @else
                                 <span class="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-maroon-50 text-sm font-bold text-maroon-700">{{ strtoupper(substr($participant->name, 0, 1)) }}</span>
                             @endif
@@ -349,15 +349,20 @@
         <div class="flex flex-col gap-4 border-b border-slate-200 px-6 py-5 xl:flex-row xl:items-center xl:justify-between">
             <div>
                 <h3 class="text-lg font-semibold text-slate-950">Contests by category</h3>
-                <p class="mt-1 text-sm text-slate-500">Configure scoring rules or open the score sheet for each contest.</p>
+                <p class="mt-1 text-sm text-slate-500">Select one or more contests below to exclude all linked participants from those contests. Existing scores are kept for later re-entry.</p>
             </div>
-            <div class="flex flex-col gap-2 sm:flex-row">
+            <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                 <a href="{{ route('events.leaderboard', $event) }}" class="inline-flex h-10 items-center justify-center rounded-xl border border-maroon-200 bg-maroon-50 px-4 text-sm font-semibold text-maroon-700 transition hover:bg-maroon-100">View current leaderboard</a>
 
                 @if (auth()->user()->isAdmin() && $event->categories->contains(fn ($category) => $category->competitions->isNotEmpty()))
-                    <form id="reset-contest-scores-form" method="POST" action="{{ route('events.competition-scores.reset', $event, false) }}" class="flex flex-col gap-2 sm:flex-row" data-loading-text="Resetting contest scores…">
+                    <form id="reset-contest-scores-form" method="POST" action="{{ route('events.competition-scores.reset', $event, false) }}" class="flex flex-col gap-2 sm:flex-row sm:flex-wrap" data-loading-text="Resetting contest scores…">
                         @csrf
                         @method('PATCH')
+                        <label class="inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700">
+                            <input id="select-all-contests" type="checkbox" class="rounded border-slate-300 text-maroon-700 focus:ring-maroon-600">
+                            Select all contests
+                        </label>
+                        <button type="submit" formaction="{{ route('events.competition-scores.exclude-linked', $event, false) }}" onclick="if (!confirm('Exclude all linked participants from the selected contests? Their saved scores and deductions will be kept for later re-entry.')) return false; this.form.setAttribute('action', this.getAttribute('formaction')); this.form.dataset.loadingText = 'Excluding linked participants…';" @disabled(! $event->participants->contains(fn ($participant) => $participant->parent_participant_id !== null)) class="h-10 rounded-xl border border-maroon-200 bg-maroon-50 px-4 text-sm font-semibold text-maroon-800 transition hover:bg-maroon-100 disabled:cursor-not-allowed disabled:opacity-50">Exclude linked from selected</button>
                         <button type="submit" name="reset_scope" value="selected" onclick="return confirm('Reset scores for the selected contests? Score entries and finalization will be cleared, but contest configuration will be preserved.')" class="h-10 rounded-xl border border-amber-300 bg-amber-50 px-4 text-sm font-semibold text-amber-800 transition hover:bg-amber-100">Reset selected</button>
                         <button type="submit" name="reset_scope" value="all" onclick="return confirm('Reset scores for every contest in this event? This cannot be undone.')" class="h-10 rounded-xl border border-red-300 bg-red-50 px-4 text-sm font-semibold text-red-700 transition hover:bg-red-100">Reset all scores</button>
                     </form>
@@ -396,7 +401,7 @@
                                         </span>
                                         @if (auth()->user()->isAdmin())
                                             <label class="flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-500">
-                                                <input form="reset-contest-scores-form" name="competition_ids[]" type="checkbox" value="{{ $competition->id }}" class="rounded border-slate-300 text-maroon-700 focus:ring-maroon-600">
+                                                <input form="reset-contest-scores-form" name="competition_ids[]" type="checkbox" value="{{ $competition->id }}" @checked(in_array($competition->id, (array) old('competition_ids', []))) class="rounded border-slate-300 text-maroon-700 focus:ring-maroon-600">
                                                 Select
                                             </label>
                                         @endif
@@ -540,6 +545,21 @@
     @if (auth()->user()->isAdmin())
         <script>
             (() => {
+                const selectAll = document.getElementById('select-all-contests');
+                const contestSelections = Array.from(document.querySelectorAll('input[form="reset-contest-scores-form"][name="competition_ids[]"]'));
+                const refreshSelectAll = () => {
+                    const selectedCount = contestSelections.filter((selection) => selection.checked).length;
+                    selectAll.checked = selectedCount === contestSelections.length;
+                    selectAll.indeterminate = selectedCount > 0 && selectedCount < contestSelections.length;
+                };
+
+                selectAll?.addEventListener('change', () => {
+                    contestSelections.forEach((selection) => { selection.checked = selectAll.checked; });
+                    refreshSelectAll();
+                });
+                contestSelections.forEach((selection) => selection.addEventListener('change', refreshSelectAll));
+                if (selectAll) refreshSelectAll();
+
                 const dialog = document.getElementById('event-details-dialog');
                 const openButton = document.getElementById('open-event-details-dialog');
 
