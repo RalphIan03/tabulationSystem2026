@@ -332,11 +332,26 @@
             </form>
 
             <div class="grid gap-3 p-5 sm:grid-cols-2">
+                @error('category')
+                    <p role="alert" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 sm:col-span-2">{{ $message }}</p>
+                @enderror
                 @forelse ($event->categories as $category)
                     <article class="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-                        <span class="grid h-9 w-9 place-items-center rounded-lg bg-maroon-100 text-sm font-bold text-maroon-700">{{ strtoupper(substr($category->name, 0, 1)) }}</span>
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-maroon-100 text-sm font-bold text-maroon-700">{{ strtoupper(substr($category->name, 0, 1)) }}</span>
+                            @if ($category->competitions->isEmpty())
+                                <form method="POST" action="{{ route('events.categories.destroy', [$event, $category], false) }}" data-loading-text="Deleting category…" onsubmit="return confirm('Delete this empty category? This cannot be undone.')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" aria-label="Delete category {{ $category->name }}" class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100">Delete category</button>
+                                </form>
+                            @endif
+                        </div>
                         <h4 class="mt-3 font-semibold text-slate-900">{{ $category->name }}</h4>
                         <p class="mt-1 text-xs text-slate-400">{{ $category->competitions->count() }} {{ Str::plural('contest', $category->competitions->count()) }}</p>
+                        @if ($category->competitions->isNotEmpty())
+                            <p class="mt-2 text-xs text-slate-500">Only empty categories can be deleted.</p>
+                        @endif
                     </article>
                 @empty
                     <p class="py-8 text-center text-sm text-slate-400 sm:col-span-2">Add a category to begin creating contests.</p>

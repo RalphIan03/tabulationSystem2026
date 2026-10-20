@@ -26,6 +26,7 @@ final class ActivityLogger
         'events.participants.update' => 'Updated a participant',
         'events.participants.destroy' => 'Deleted a participant',
         'events.categories.store' => 'Added a category',
+        'events.categories.destroy' => 'Deleted a category',
         'events.categories.competitions.store' => 'Added a contest',
         'events.categories.competitions.destroy' => 'Deleted a contest',
         'events.competition-scores.reset' => 'Reset contest scores',

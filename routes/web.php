@@ -97,6 +97,8 @@ Route::middleware(['auth', 'active', 'credentials-updated', 'visible-event', 'ar
 
         Route::post('/events/{event}/categories', [CategoryController::class, 'store'])
             ->name('events.categories.store');
+        Route::delete('/events/{event}/categories/{category}', [CategoryController::class, 'destroy'])
+            ->name('events.categories.destroy');
         Route::post(
             '/events/{event}/categories/{category}/competitions',
             [CompetitionController::class, 'store'],
