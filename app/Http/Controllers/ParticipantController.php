@@ -8,26 +8,24 @@ use App\Http\Requests\StoreParticipantRequest;
 use App\Http\Requests\UpdateParticipantRequest;
 use App\Models\Event;
 use App\Models\Participant;
+use App\Services\ParticipantImageStorage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
-use RuntimeException;
 use Throwable;
 
 final class ParticipantController extends Controller
 {
-    public function store(StoreParticipantRequest $request, Event $event): RedirectResponse
-    {
+    public function store(
+        StoreParticipantRequest $request,
+        Event $event,
+        ParticipantImageStorage $images,
+    ): RedirectResponse {
         $profilePicturePath = null;
 
         if ($request->hasFile('participant_image')) {
-            $profilePicturePath = $request->file('participant_image')
-                ?->store("participants/{$event->getKey()}", 'public');
-
-            if ($profilePicturePath === false) {
-                throw new RuntimeException('The participant profile picture could not be stored.');
-            }
+            $profilePicturePath = $images->store($request->file('participant_image'), $event);
         }
 
         try {
@@ -53,17 +51,13 @@ final class ParticipantController extends Controller
         UpdateParticipantRequest $request,
         Event $event,
         Participant $participant,
+        ParticipantImageStorage $images,
     ): RedirectResponse {
         $oldProfilePicturePath = $participant->profile_picture_path;
         $newProfilePicturePath = null;
 
         if ($request->hasFile('participant_image')) {
-            $newProfilePicturePath = $request->file('participant_image')
-                ?->store("participants/{$event->getKey()}", 'public');
-
-            if ($newProfilePicturePath === false) {
-                throw new RuntimeException('The participant profile picture could not be stored.');
-            }
+            $newProfilePicturePath = $images->store($request->file('participant_image'), $event);
         }
 
         $profilePicturePath = $newProfilePicturePath

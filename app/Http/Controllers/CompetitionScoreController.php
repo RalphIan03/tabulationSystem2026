@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\BatchExcludeLinkedContestantsRequest;
 use App\Http\Requests\ImportCompetitionScoresRequest;
 use App\Http\Requests\ResetCompetitionScoresRequest;
 use App\Http\Requests\UpdateCompetitionDeductionsRequest;
@@ -109,6 +110,24 @@ final class CompetitionScoreController extends Controller
             $category,
             $competition,
         ])->with('status', 'Participant scores saved successfully.');
+    }
+
+    public function excludeLinkedContestants(
+        BatchExcludeLinkedContestantsRequest $request,
+        Event $event,
+        Category $category,
+        Competition $competition,
+    ): RedirectResponse {
+        $participants = $event->participants()
+            ->whereNotNull('parent_participant_id')
+            ->whereIn('id', $request->validated('participant_ids'))
+            ->get();
+
+        $count = $this->scoreManager->excludeLinkedContestants($competition, $participants);
+        $label = $count === 1 ? 'contestant' : 'contestants';
+
+        return to_route('events.categories.competitions.scores.edit', [$event, $category, $competition])
+            ->with('status', "{$count} linked {$label} excluded from this contest.");
     }
 
     public function updateFinalization(

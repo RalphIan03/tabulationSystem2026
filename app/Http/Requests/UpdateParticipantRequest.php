@@ -30,7 +30,7 @@ final class UpdateParticipantRequest extends FormRequest
         return [
             'participant_name' => ['required', 'string', 'max:255'],
             'participant_reference' => ['nullable', 'string', 'max:100'],
-            'participant_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'participant_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240', 'dimensions:max_width=6000,max_height=6000'],
             'remove_profile_picture' => ['nullable', 'boolean'],
             'parent_participant_id' => [
                 'nullable',

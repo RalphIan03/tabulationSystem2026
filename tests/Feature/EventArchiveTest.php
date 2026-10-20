@@ -105,6 +105,9 @@ final class EventArchiveTest extends TestCase
         $this->actingAs($admin)->patch(route('events.categories.competitions.scores.finalization.update', [
             $event, $category, $competition,
         ]))->assertForbidden();
+        $this->actingAs($admin)->patch(route('events.categories.competitions.scores.exclude-linked', [
+            $event, $category, $competition,
+        ]), ['participant_ids' => [$participant->id]])->assertForbidden();
         $this->actingAs($admin)->get(route('events.leaderboard', $event))->assertForbidden();
 
         $this->assertSame('Archived Sports', $event->refresh()->name);

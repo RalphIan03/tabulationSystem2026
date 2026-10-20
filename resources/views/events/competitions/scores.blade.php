@@ -140,6 +140,37 @@
             </form>
         @endif
 
+        @if ($isAdmin && $event->participants->contains(fn ($participant) => $participant->parent_participant_id !== null))
+            <form id="batch-exclude-linked-form" method="POST" action="{{ route('events.categories.competitions.scores.exclude-linked', [$event, $category, $competition], false) }}" class="mt-6 rounded-2xl border border-maroon-200 bg-maroon-50/50 p-5 shadow-sm" data-loading-text="Excluding linked contestants…" onsubmit="return confirm('Exclude the selected linked contestants from this contest? Their saved scores will be kept for later re-entry.')">
+                @csrf
+                @method('PATCH')
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h3 class="font-semibold text-maroon-950">Batch exclude linked contestants</h3>
+                        <p class="mt-1 text-sm text-slate-600">Select linked contestants to mark as No entry in this contest only. Their saved scores and deductions are preserved.</p>
+                    </div>
+                    <label class="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-maroon-800">
+                        <input id="select-all-linked-contestants" type="checkbox" class="h-4 w-4 rounded border-maroon-300 text-maroon-700 focus:ring-maroon-600">
+                        Select all linked
+                    </label>
+                </div>
+                <div class="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    @foreach ($event->participants->whereNotNull('parent_participant_id') as $linkedContestant)
+                        <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-maroon-100 bg-white px-4 py-3 text-sm font-medium text-slate-800 hover:border-maroon-300">
+                            <input name="participant_ids[]" type="checkbox" value="{{ $linkedContestant->id }}" @checked(in_array($linkedContestant->id, (array) old('participant_ids', []))) class="h-4 w-4 rounded border-slate-300 text-maroon-700 focus:ring-maroon-600">
+                            <span>{{ $linkedContestant->name }}</span>
+                            @if ($resultsByParticipant->get($linkedContestant->id)?->has_entry === false)
+                                <span class="ml-auto text-xs text-slate-500">No entry</span>
+                            @endif
+                        </label>
+                    @endforeach
+                </div>
+                @error('participant_ids')<p class="mt-3 text-sm text-red-700">{{ $message }}</p>@enderror
+                @error('participant_ids.*')<p class="mt-3 text-sm text-red-700">{{ $message }}</p>@enderror
+                <button type="submit" class="mt-4 h-10 rounded-xl bg-maroon-700 px-5 text-sm font-semibold text-white transition hover:bg-maroon-800">Exclude selected from this contest</button>
+            </form>
+        @endif
+
         <form method="POST" action="{{ route('events.categories.competitions.scores.update', [$event, $category, $competition], false) }}" class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" data-loading-text="Saving participant scores…">
             @csrf
             @method('PATCH')
@@ -365,6 +396,28 @@
 
 @push('scripts')
     <script>
+        (() => {
+            const selectAll = document.getElementById('select-all-linked-contestants');
+            const selections = Array.from(document.querySelectorAll('#batch-exclude-linked-form input[name="participant_ids[]"]'));
+
+            if (!selectAll) {
+                return;
+            }
+
+            const refreshSelectAll = () => {
+                const selectedCount = selections.filter((selection) => selection.checked).length;
+                selectAll.checked = selectedCount === selections.length;
+                selectAll.indeterminate = selectedCount > 0 && selectedCount < selections.length;
+            };
+
+            selectAll.addEventListener('change', () => {
+                selections.forEach((selection) => { selection.checked = selectAll.checked; });
+                refreshSelectAll();
+            });
+            selections.forEach((selection) => selection.addEventListener('change', refreshSelectAll));
+            refreshSelectAll();
+        })();
+
         (() => {
             const button = document.getElementById('rank-sort-button');
             const heading = document.getElementById('rank-sort-heading');

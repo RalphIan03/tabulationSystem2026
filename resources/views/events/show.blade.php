@@ -217,7 +217,7 @@
                 <div>
                     <label for="participant_image" class="mb-1.5 block text-xs font-semibold text-slate-600">Profile picture <span class="font-normal text-slate-400">(optional)</span></label>
                     <input id="participant_image" name="participant_image" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="block w-full rounded-xl border border-slate-300 bg-white text-sm text-slate-500 file:mr-4 file:border-0 file:bg-maroon-50 file:px-4 file:py-3 file:text-sm file:font-semibold file:text-maroon-700 hover:file:bg-maroon-100">
-                    <p class="mt-1.5 text-xs text-slate-400">JPG, PNG, or WebP up to 2 MB.</p>
+                    <p class="mt-1.5 text-xs text-slate-400">JPG, PNG, or WebP up to 10 MB and 6000 × 6000 pixels. Images over 2 MB are automatically compressed.</p>
                     @error('participant_image')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
                 </div>
                 <button type="submit" class="h-11 w-full rounded-xl bg-maroon-700 px-5 text-sm font-semibold text-white transition hover:bg-maroon-800">Add participant</button>
@@ -292,6 +292,7 @@
                                 <div>
                                     <label for="participant_image_{{ $participant->id }}" class="mb-1 block text-xs font-semibold text-slate-600">Replace profile picture</label>
                                     <input id="participant_image_{{ $participant->id }}" name="participant_image" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-500">
+                                    <p class="mt-1 text-xs text-slate-400">Up to 10 MB and 6000 × 6000 pixels; images over 2 MB are automatically compressed.</p>
                                 </div>
                                 @if ($participant->profile_picture_path)
                                     <label class="flex items-center gap-2 text-xs text-slate-600">

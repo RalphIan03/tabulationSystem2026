@@ -39,6 +39,65 @@ final class ParticipantAndContestConfigurationTest extends TestCase
         Storage::disk('public')->assertExists($participant->profile_picture_path);
     }
 
+    public function test_oversized_participant_picture_is_compressed_before_storage(): void
+    {
+        Storage::fake('public');
+
+        $user = User::factory()->create();
+        $event = Event::factory()->for($user, 'creator')->create();
+        $image = UploadedFile::fake()->image('large.png', 1200, 900)->size(3072);
+
+        $this->actingAs($user)
+            ->post(route('events.participants.store', $event), [
+                'participant_name' => 'Large Image',
+                'participant_image' => $image,
+            ])
+            ->assertRedirect(route('events.show', $event))
+            ->assertSessionHasNoErrors();
+
+        $path = Participant::query()->sole()->profile_picture_path;
+
+        $this->assertNotNull($path);
+        Storage::disk('public')->assertExists($path);
+        $this->assertLessThanOrEqual(2048 * 1024, Storage::disk('public')->size($path));
+        $this->assertContains(pathinfo($path, PATHINFO_EXTENSION), ['webp', 'jpg']);
+        $this->assertNotFalse(getimagesize(Storage::disk('public')->path($path)));
+    }
+
+    public function test_participant_picture_above_upload_limit_is_rejected(): void
+    {
+        Storage::fake('public');
+
+        $user = User::factory()->create();
+        $event = Event::factory()->for($user, 'creator')->create();
+
+        $this->actingAs($user)
+            ->post(route('events.participants.store', $event), [
+                'participant_name' => 'Too Large',
+                'participant_image' => UploadedFile::fake()->image('too-large.jpg')->size(10241),
+            ])
+            ->assertSessionHasErrors('participant_image');
+
+        $this->assertDatabaseCount('participants', 0);
+    }
+
+    public function test_participant_picture_above_dimension_limit_is_rejected(): void
+    {
+        Storage::fake('public');
+
+        $user = User::factory()->create();
+        $event = Event::factory()->for($user, 'creator')->create();
+
+        $this->actingAs($user)
+            ->post(route('events.participants.store', $event), [
+                'participant_name' => 'Too Wide',
+                'participant_image' => UploadedFile::fake()->image('too-wide.jpg', 6001, 1),
+            ])
+            ->assertSessionHasErrors('participant_image');
+
+        $this->assertDatabaseCount('participants', 0);
+    }
+
     public function test_subteam_can_be_added_to_a_team_in_the_same_event_but_cannot_be_nested_or_cross_events(): void
     {
         $auditor = User::factory()->create();
@@ -115,6 +174,34 @@ final class ParticipantAndContestConfigurationTest extends TestCase
         $this->assertNotSame($oldPath, $participant->profile_picture_path);
         Storage::disk('public')->assertMissing($oldPath);
         Storage::disk('public')->assertExists($participant->profile_picture_path);
+    }
+
+    public function test_oversized_replacement_picture_is_compressed_and_old_picture_is_removed(): void
+    {
+        Storage::fake('public');
+
+        $user = User::factory()->create();
+        $event = Event::factory()->for($user, 'creator')->create();
+        $oldPath = UploadedFile::fake()->image('old.jpg')->store("participants/{$event->id}", 'public');
+        $participant = $event->participants()->create([
+            'name' => 'Contestant',
+            'profile_picture_path' => $oldPath,
+        ]);
+
+        $this->actingAs($user)
+            ->patch(route('events.participants.update', [$event, $participant]), [
+                'participant_name' => 'Contestant',
+                'participant_image' => UploadedFile::fake()->image('replacement.jpg', 1200, 900)->size(3072),
+            ])
+            ->assertRedirect(route('events.show', $event))
+            ->assertSessionHasNoErrors();
+
+        $newPath = $participant->refresh()->profile_picture_path;
+
+        $this->assertNotSame($oldPath, $newPath);
+        Storage::disk('public')->assertMissing($oldPath);
+        Storage::disk('public')->assertExists($newPath);
+        $this->assertLessThanOrEqual(2048 * 1024, Storage::disk('public')->size($newPath));
     }
 
     public function test_deleting_participant_also_deletes_profile_picture(): void

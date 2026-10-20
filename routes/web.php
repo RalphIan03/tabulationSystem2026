@@ -132,6 +132,10 @@ Route::middleware(['auth', 'active', 'credentials-updated', 'visible-event', 'ar
             [CompetitionScoreController::class, 'update'],
         )->name('events.categories.competitions.scores.update');
         Route::patch(
+            '/events/{event}/categories/{category}/competitions/{competition}/scores/exclude-linked',
+            [CompetitionScoreController::class, 'excludeLinkedContestants'],
+        )->middleware('admin')->name('events.categories.competitions.scores.exclude-linked');
+        Route::patch(
             '/events/{event}/categories/{category}/competitions/{competition}/deductions',
             [CompetitionScoreController::class, 'updateDeductions'],
         )->name('events.categories.competitions.deductions.update');

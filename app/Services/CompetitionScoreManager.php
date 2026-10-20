@@ -60,6 +60,27 @@ final class CompetitionScoreManager
         $this->invalidateLeaderboard($competition);
     }
 
+    /** @param Collection<int, Participant> $participants */
+    public function excludeLinkedContestants(Competition $competition, Collection $participants): int
+    {
+        DB::transaction(function () use ($competition, $participants): void {
+            foreach ($participants as $participant) {
+                $result = $competition->results()->firstOrCreate(
+                    ['participant_id' => $participant->getKey()],
+                    ['has_entry' => false],
+                );
+
+                if ($result->has_entry) {
+                    $result->update(['has_entry' => false]);
+                }
+            }
+        });
+
+        $this->invalidateLeaderboard($competition);
+
+        return $participants->count();
+    }
+
     /** @param array<int|string, mixed> $deductions */
     public function saveDeductions(Competition $competition, array $deductions): void
     {
