@@ -7,6 +7,7 @@ namespace App\Http\Requests;
 use App\Models\Event;
 use App\Models\Participant;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 final class UpdateParticipantRequest extends FormRequest
 {
@@ -23,11 +24,22 @@ final class UpdateParticipantRequest extends FormRequest
     /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
+        $event = $this->route('event');
+        $participant = $this->route('participant');
+
         return [
             'participant_name' => ['required', 'string', 'max:255'],
             'participant_reference' => ['nullable', 'string', 'max:100'],
             'participant_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'remove_profile_picture' => ['nullable', 'boolean'],
+            'parent_participant_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('participants', 'id')
+                    ->where('event_id', $event?->getKey())->whereNull('parent_participant_id'),
+                Rule::notIn([$participant?->getKey()]),
+                Rule::prohibitedIf($participant instanceof Participant && $participant->childTeams()->exists()),
+            ],
         ];
     }
 }

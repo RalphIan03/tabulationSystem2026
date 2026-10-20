@@ -9,6 +9,7 @@ use App\Models\Competition;
 use App\Models\Event;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 final class UpdateCompetitionScoresRequest extends FormRequest
 {
@@ -26,6 +27,52 @@ final class UpdateCompetitionScoresRequest extends FormRequest
             && (! $competition->scoresAreFinalized() || $this->user()?->isAdmin() === true);
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (! $this->boolean('exclude_subteams')) {
+            return;
+        }
+
+        $event = $this->route('event');
+        $entries = $this->input('entries', []);
+
+        if (! $event instanceof Event || ! is_array($entries)) {
+            return;
+        }
+
+        $subteamIds = $event->participants()
+            ->whereNotNull('parent_participant_id')
+            ->pluck('id')
+            ->all();
+
+        $scores = $this->input('scores');
+        $wins = $this->input('wins');
+        $placements = $this->input('placements');
+
+        foreach ($subteamIds as $participantId) {
+            $entries[$participantId] = 0;
+
+            if (is_array($scores)) {
+                unset($scores[$participantId]);
+            }
+
+            if (is_array($wins)) {
+                unset($wins[$participantId]);
+            }
+
+            if (is_array($placements)) {
+                unset($placements[$participantId]);
+            }
+        }
+
+        $this->merge([
+            'entries' => $entries,
+            'scores' => $scores,
+            'wins' => $wins,
+            'placements' => $placements,
+        ]);
+    }
+
     /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
@@ -41,8 +88,30 @@ final class UpdateCompetitionScoresRequest extends FormRequest
             ->map(static fn (int|string $id): string => (string) $id)
             ->all();
 
+        if ($competition->usesRankingScoring()) {
+            $rules = [
+                'exclude_subteams' => ['sometimes', 'boolean'],
+                'entries' => ['sometimes', Rule::array($participantIds)],
+                'entries.*' => ['boolean'],
+                'placements' => ['required', Rule::array($participantIds)],
+            ];
+
+            foreach ($participantIds as $participantId) {
+                $rules["placements.{$participantId}"] = [
+                    Rule::excludeIf(! $this->boolean("entries.{$participantId}", true)),
+                    'nullable',
+                    'integer',
+                    'min:1',
+                    'max:'.count($participantIds),
+                ];
+            }
+
+            return $rules;
+        }
+
         if (! $competition->usesCriteriaScoring()) {
             return [
+                'exclude_subteams' => ['sometimes', 'boolean'],
                 'entries' => ['sometimes', Rule::array($participantIds)],
                 'entries.*' => ['boolean'],
                 'wins' => ['required', Rule::array($participantIds)],
@@ -57,6 +126,7 @@ final class UpdateCompetitionScoresRequest extends FormRequest
             ->all();
 
         $rules = [
+            'exclude_subteams' => ['sometimes', 'boolean'],
             'entries' => ['sometimes', Rule::array($participantIds)],
             'entries.*' => ['boolean'],
             'scores' => ['required', Rule::array($participantIds)],
@@ -86,6 +156,37 @@ final class UpdateCompetitionScoresRequest extends FormRequest
         }
 
         return $rules;
+    }
+
+    /** @return array<int, callable> */
+    public function after(): array
+    {
+        $competition = $this->route('competition');
+
+        if (! $competition instanceof Competition || ! $competition->usesRankingScoring()) {
+            return [];
+        }
+
+        return [function (Validator $validator): void {
+            $seen = [];
+
+            foreach ((array) $this->input('placements', []) as $participantId => $placement) {
+                if (! $this->boolean("entries.{$participantId}", true)
+                    || $placement === null
+                    || $placement === ''
+                    || (! is_int($placement) && ! is_string($placement))) {
+                    continue;
+                }
+
+                $rank = (string) $placement;
+
+                if (isset($seen[$rank])) {
+                    $validator->errors()->add("placements.{$participantId}", 'Each entered participant must have a unique rank.');
+                }
+
+                $seen[$rank] = true;
+            }
+        }];
     }
 
     /** @return array<string, string> */

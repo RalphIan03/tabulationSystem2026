@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 final class StoreParticipantRequest extends FormRequest
 {
@@ -16,10 +17,14 @@ final class StoreParticipantRequest extends FormRequest
     /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
+        $event = $this->route('event');
+
         return [
             'participant_name' => ['required', 'string', 'max:255'],
             'participant_reference' => ['nullable', 'string', 'max:100'],
             'participant_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'parent_participant_id' => ['nullable', 'integer', Rule::exists('participants', 'id')
+                ->where('event_id', $event?->getKey())->whereNull('parent_participant_id')],
         ];
     }
 }

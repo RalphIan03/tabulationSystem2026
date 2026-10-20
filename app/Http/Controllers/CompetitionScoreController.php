@@ -40,7 +40,7 @@ final class CompetitionScoreController extends Controller
         $competition->load([
             'criteria' => fn ($query) => $query->orderBy('name'),
             'rankScores',
-            'results.participant',
+            'results.participant.parentTeam',
             'results.criterionScores',
         ]);
 

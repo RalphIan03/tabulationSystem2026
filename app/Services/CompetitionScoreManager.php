@@ -38,6 +38,17 @@ final class CompetitionScoreManager
                 return;
             }
 
+            if ($competition->usesRankingScoring()) {
+                $this->savePlacements(
+                    $competition,
+                    $participants,
+                    $data['placements'] ?? [],
+                    $data['entries'] ?? [],
+                );
+
+                return;
+            }
+
             $this->saveWins(
                 $competition,
                 $participants,
@@ -61,7 +72,7 @@ final class CompetitionScoreManager
             foreach ($competition->results as $result) {
                 $hasBaseScore = $competition->usesCriteriaScoring()
                     ? $result->criteriaScoreSummary($competition)['rankable']
-                    : $result->wins !== null;
+                    : ($competition->usesRankingScoring() ? $result->placement !== null : $result->wins !== null);
 
                 if (! $result->has_entry
                     || ! $hasBaseScore
@@ -103,6 +114,35 @@ final class CompetitionScoreManager
             }
 
             $hasScores = $enteredResults->isNotEmpty();
+        } elseif ($competition->usesRankingScoring()) {
+            $competition->load('results', 'category.event.participants');
+            $results = $competition->results->keyBy('participant_id');
+            $placements = [];
+
+            foreach ($competition->category->event->participants as $participant) {
+                $result = $results->get($participant->getKey());
+
+                if ($result?->has_entry === false) {
+                    continue;
+                }
+
+                if ($result?->placement === null) {
+                    throw ValidationException::withMessages([
+                        'finalization' => 'Enter a rank for every participating team before finalizing.',
+                    ]);
+                }
+
+                $placements[] = $result->placement;
+            }
+
+            sort($placements);
+            $hasScores = $placements !== [];
+
+            if ($hasScores && $placements !== range(1, count($placements))) {
+                throw ValidationException::withMessages([
+                    'finalization' => 'Ranks must be unique and consecutive from 1 before finalizing.',
+                ]);
+            }
         } else {
             $hasScores = $competition->results()->where('has_entry', true)->whereNotNull('wins')->exists();
         }
@@ -272,6 +312,37 @@ final class CompetitionScoreManager
                 'wins' => (int) $value,
             ]);
             $results->put($participant->getKey(), $result);
+        }
+    }
+
+    /**
+     * @param  Collection<int, Participant>  $participants
+     * @param  array<int|string, mixed>  $placements
+     * @param  array<int|string, mixed>  $entries
+     */
+    private function savePlacements(
+        Competition $competition,
+        Collection $participants,
+        array $placements,
+        array $entries,
+    ): void {
+        $results = $competition->results->keyBy('participant_id');
+
+        foreach ($participants as $participant) {
+            $participantId = $participant->getKey();
+            $result = $results->get($participantId);
+            $hasEntry = array_key_exists($participantId, $entries)
+                ? (bool) $entries[$participantId]
+                : ($result?->has_entry ?? true);
+            $placement = $placements[$participantId] ?? null;
+
+            $result ??= $competition->results()->create(['participant_id' => $participantId]);
+            $results->put($participantId, $result);
+            $result->update([
+                'has_entry' => $hasEntry,
+                'placement' => $hasEntry && $placement !== '' ? $placement : null,
+                'deduction' => $hasEntry ? ($result->deduction ?? 0) : 0,
+            ]);
         }
     }
 

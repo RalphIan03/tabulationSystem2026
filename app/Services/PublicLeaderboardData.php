@@ -45,7 +45,7 @@ final class PublicLeaderboardData
             'categories.competitions.rankScores',
             'categories.competitions.criteria',
             'categories.competitions.results' => fn ($query) => $query->where('has_entry', true),
-            'categories.competitions.results.participant',
+            'categories.competitions.results.participant.parentTeam',
             'categories.competitions.results.criterionScores',
         ]);
 
@@ -115,7 +115,7 @@ final class PublicLeaderboardData
                 'criteria',
                 'rankScores',
                 'results' => fn ($query) => $query->where('has_entry', true),
-                'results.participant',
+                'results.participant.parentTeam',
                 'results.criterionScores',
             ]);
 
@@ -125,7 +125,9 @@ final class PublicLeaderboardData
                     ...$this->participantColumns($row['participant']),
                     'result' => $competition->usesCriteriaScoring()
                         ? number_format($row['raw_score'], 2, '.', '')
-                        : $row['wins'].' '.Str::plural('win', $row['wins']),
+                        : ($competition->usesRankingScoring()
+                            ? '#'.$row['placement']
+                            : $row['wins'].' '.Str::plural('win', $row['wins'])),
                     'points' => $row['leaderboard_points'],
                 ])->all();
         }
@@ -144,7 +146,7 @@ final class PublicLeaderboardData
             'categories.competitions.rankScores',
             'categories.competitions.criteria',
             'categories.competitions.results' => fn ($query) => $query->where('has_entry', true),
-            'categories.competitions.results.participant',
+            'categories.competitions.results.participant.parentTeam',
             'categories.competitions.results.criterionScores',
         ]);
 

@@ -40,6 +40,11 @@ final class Competition extends Model
         return $this->scoring_method === CompetitionScoringMethod::Criteria;
     }
 
+    public function usesRankingScoring(): bool
+    {
+        return $this->scoring_method === CompetitionScoringMethod::Ranking;
+    }
+
     public function scoresAreFinalized(): bool
     {
         return $this->scores_finalized_at !== null;
@@ -53,14 +58,16 @@ final class Competition extends Model
 
         if ($this->relationLoaded('results')) {
             return $this->results->contains(fn (CompetitionResult $result): bool => $result->has_entry
-                && ($this->usesCriteriaScoring() ? $result->criterionScores->isNotEmpty() : $result->wins !== null));
+                && ($this->usesCriteriaScoring()
+                    ? $result->criterionScores->isNotEmpty()
+                    : ($this->usesRankingScoring() ? $result->placement !== null : $result->wins !== null)));
         }
 
         return $this->results()
             ->where('has_entry', true)
             ->when($this->usesCriteriaScoring(),
                 fn ($query) => $query->whereHas('criterionScores'),
-                fn ($query) => $query->whereNotNull('wins'))
+                fn ($query) => $query->whereNotNull($this->usesRankingScoring() ? 'placement' : 'wins'))
             ->exists();
     }
 

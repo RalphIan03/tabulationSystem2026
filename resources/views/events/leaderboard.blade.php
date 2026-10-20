@@ -133,10 +133,10 @@
 
                             @if ($standings->isNotEmpty())
                                 <div class="overflow-x-auto"><table class="w-full min-w-[440px] text-left text-sm">
-                                    <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-4 py-2">Rank</th><th class="px-4 py-2">Participant</th><th class="px-4 py-2 text-right">{{ $competition->usesCriteriaScoring() ? 'Score' : 'Wins' }}</th><th class="px-4 py-2 text-right">Points</th></tr></thead>
+                                    <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-4 py-2">Rank</th><th class="px-4 py-2">Participant</th><th class="px-4 py-2 text-right">{{ $competition->usesCriteriaScoring() ? 'Score' : ($competition->usesRankingScoring() ? 'Placement' : 'Wins') }}</th><th class="px-4 py-2 text-right">Points</th></tr></thead>
                                     <tbody class="divide-y divide-slate-100">
                                         @foreach ($standings as $row)
-                                            <tr><td class="px-4 py-3 font-bold text-maroon-700">#{{ $row['rank'] }}</td><td class="px-4 py-3 font-medium text-slate-800">{{ $row['participant']->name }}</td><td class="px-4 py-3 text-right">{{ $competition->usesCriteriaScoring() ? number_format($row['raw_score'], 2) : $row['wins'] }}</td><td class="px-4 py-3 text-right font-semibold">{{ number_format($row['leaderboard_points'], 2) }}</td></tr>
+                                            <tr><td class="px-4 py-3 font-bold text-maroon-700">#{{ $row['rank'] }}</td><td class="px-4 py-3 font-medium text-slate-800">{{ $row['participant']->name }}</td><td class="px-4 py-3 text-right">{{ $competition->usesCriteriaScoring() ? number_format($row['raw_score'], 2) : ($competition->usesRankingScoring() ? '#'.$row['placement'] : $row['wins']) }}</td><td class="px-4 py-3 text-right font-semibold">{{ number_format($row['leaderboard_points'], 2) }}</td></tr>
                                         @endforeach
                                     </tbody>
                                 </table></div>

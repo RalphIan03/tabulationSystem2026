@@ -10,13 +10,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 final class CompetitionResult extends Model
 {
-    protected $fillable = ['participant_id', 'has_entry', 'wins', 'deduction'];
+    protected $fillable = ['participant_id', 'has_entry', 'wins', 'placement', 'deduction'];
 
     protected function casts(): array
     {
         return [
             'has_entry' => 'boolean',
             'wins' => 'integer',
+            'placement' => 'integer',
             'deduction' => 'decimal:2',
         ];
     }

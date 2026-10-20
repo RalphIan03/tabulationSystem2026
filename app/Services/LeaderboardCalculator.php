@@ -21,6 +21,7 @@ final class LeaderboardCalculator
      *     deduction: float,
      *     raw_score: float,
      *     wins: ?int,
+     *     placement: ?int,
      *     rank_points: float,
      *     leaderboard_points: float
      * }>
@@ -36,7 +37,7 @@ final class LeaderboardCalculator
             $competition->load([
                 'criteria',
                 'rankScores',
-                'results.participant',
+                'results.participant.parentTeam',
                 'results.criterionScores',
             ]);
         }
@@ -45,12 +46,15 @@ final class LeaderboardCalculator
             ->filter(fn ($result): bool => $result->has_entry
                 && ($competition->usesCriteriaScoring()
                     ? $result->criteriaScoreSummary($competition)['rankable']
-                    : $result->wins !== null))
+                    : ($competition->usesRankingScoring() ? $result->placement !== null : $result->wins !== null)))
             ->map(function ($result) use ($competition): array {
-                $wins = $competition->usesCriteriaScoring() ? null : (int) $result->wins;
+                $wins = $competition->usesCriteriaScoring() || $competition->usesRankingScoring()
+                    ? null
+                    : (int) $result->wins;
+                $placement = $competition->usesRankingScoring() ? (int) $result->placement : null;
                 $grossScore = $competition->usesCriteriaScoring()
                     ? (float) $result->criteriaScoreSummary($competition)['gross']
-                    : (float) $wins;
+                    : (float) ($placement ?? $wins);
                 $deduction = (float) $result->deduction;
 
                 return [
@@ -62,12 +66,15 @@ final class LeaderboardCalculator
                         ? max(0.0, $grossScore - $deduction)
                         : $grossScore,
                     'wins' => $wins,
+                    'placement' => $placement,
                     'rank_points' => 0.0,
                     'leaderboard_points' => 0.0,
                 ];
             })
-            ->sort(function (array $left, array $right): int {
-                $scoreComparison = $right['raw_score'] <=> $left['raw_score'];
+            ->sort(function (array $left, array $right) use ($competition): int {
+                $scoreComparison = $competition->usesRankingScoring()
+                    ? $left['placement'] <=> $right['placement']
+                    : $right['raw_score'] <=> $left['raw_score'];
 
                 return $scoreComparison !== 0
                     ? $scoreComparison
@@ -87,7 +94,9 @@ final class LeaderboardCalculator
             &$previousScore,
             &$rank,
         ): array {
-            if ($previousScore === null || abs($row['raw_score'] - $previousScore) > 0.00001) {
+            if ($competition->usesRankingScoring()) {
+                $rank = $row['placement'];
+            } elseif ($previousScore === null || abs($row['raw_score'] - $previousScore) > 0.00001) {
                 $rank = $tieRankingMethod === TieRankingMethod::SkipPositions
                     ? $index + 1
                     : $rank + 1;
@@ -168,7 +177,7 @@ final class LeaderboardCalculator
             $event->load([
                 'categories.competitions.criteria',
                 'categories.competitions.rankScores',
-                'categories.competitions.results.participant',
+                'categories.competitions.results.participant.parentTeam',
                 'categories.competitions.results.criterionScores',
             ]);
         }
@@ -177,8 +186,11 @@ final class LeaderboardCalculator
 
         foreach ($event->categories as $category) {
             foreach ($category->competitions as $competition) {
+                $enteredTeams = [];
+                $winningTeams = [];
+
                 foreach ($this->competitionStandings($competition, $event) as $row) {
-                    $participant = $row['participant'];
+                    $participant = $row['participant']->parentTeam ?? $row['participant'];
                     $participantId = (string) $participant->getKey();
                     $totals[$participantId] ??= [
                         'participant' => $participant,
@@ -188,10 +200,18 @@ final class LeaderboardCalculator
                         'contests_entered' => 0,
                     ];
 
-                    $totals[$participantId]['contest_wins'] += $row['rank'] === 1 ? 1 : 0;
+                    if ($row['rank'] === 1 && ! isset($winningTeams[$participantId])) {
+                        $totals[$participantId]['contest_wins']++;
+                        $winningTeams[$participantId] = true;
+                    }
+
                     $totals[$participantId]['recorded_wins'] += $row['wins'] ?? 0;
                     $totals[$participantId]['leaderboard_points'] += $row['leaderboard_points'];
-                    $totals[$participantId]['contests_entered']++;
+
+                    if (! isset($enteredTeams[$participantId])) {
+                        $totals[$participantId]['contests_entered']++;
+                        $enteredTeams[$participantId] = true;
+                    }
                 }
             }
         }
@@ -216,6 +236,7 @@ final class LeaderboardCalculator
 
         return $competition->results->every(
             static fn ($result): bool => $result->relationLoaded('participant')
+                && $result->participant->relationLoaded('parentTeam')
                 && $result->relationLoaded('criterionScores'),
         );
     }

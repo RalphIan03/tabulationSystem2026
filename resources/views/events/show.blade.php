@@ -181,11 +181,15 @@
                 <div class="flex items-center justify-between gap-4">
                     <div>
                         <h3 class="text-lg font-semibold text-slate-950">Participants</h3>
-                        <p class="mt-1 text-sm text-slate-500">Manage competitors and optional profile photos.</p>
+                        <p class="mt-1 text-sm text-slate-500">Manage competitors, team entries, and optional profile photos.</p>
                     </div>
                     <span class="rounded-full bg-maroon-50 px-2.5 py-1 text-xs font-semibold text-maroon-700">{{ $event->participants->count() }}</span>
                 </div>
             </div>
+
+            @error('participant')
+                <p role="alert" class="border-b border-red-200 bg-red-50 px-6 py-3 text-sm text-red-700">{{ $message }}</p>
+            @enderror
 
             <form method="POST" action="{{ route('events.participants.store', $event, false) }}" enctype="multipart/form-data" class="space-y-3 border-b border-slate-200 bg-slate-50/70 p-5">
                 @csrf
@@ -198,6 +202,17 @@
                     <label for="participant_reference" class="mb-1.5 block text-xs font-semibold text-slate-600">Reference number <span class="font-normal text-slate-400">(optional)</span></label>
                     <input id="participant_reference" name="participant_reference" type="text" value="{{ old('participant_reference') }}" class="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10" placeholder="e.g. P-001">
                     @error('participant_reference')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <label for="parent_participant_id" class="mb-1.5 block text-xs font-semibold text-slate-600">Parent team <span class="font-normal text-slate-400">(optional)</span></label>
+                    <select id="parent_participant_id" name="parent_participant_id" class="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                        <option value="">Independent participant or team</option>
+                        @foreach ($event->participants->whereNull('parent_participant_id') as $team)
+                            <option value="{{ $team->id }}" @selected((string) old('parent_participant_id') === (string) $team->id)>{{ $team->name }}</option>
+                        @endforeach
+                    </select>
+                    <p class="mt-1.5 text-xs text-slate-400">Choose TEAM A when adding TEAM A2. Both enter contests separately; earned points roll up to TEAM A overall.</p>
+                    @error('parent_participant_id')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
                 </div>
                 <div>
                     <label for="participant_image" class="mb-1.5 block text-xs font-semibold text-slate-600">Profile picture <span class="font-normal text-slate-400">(optional)</span></label>
@@ -221,9 +236,12 @@
                             <div class="min-w-0 flex-1 pt-1">
                                 <p class="truncate text-sm font-semibold text-slate-900">{{ $participant->name }}</p>
                                 <p class="mt-0.5 text-xs text-slate-400">{{ $participant->reference_no ?: 'No reference number' }}</p>
+                                @if ($participant->parent_participant_id)
+                                    <p class="mt-1 text-xs font-medium text-maroon-700">Points roll up to {{ $event->participants->firstWhere('id', $participant->parent_participant_id)?->name }}</p>
+                                @endif
                             </div>
 
-                            @if (! in_array($participant->id, $lockedParticipantIds, true))
+                            @if (! in_array($participant->id, $lockedParticipantIds, true) && $participant->child_teams_count === 0)
                             <form method="POST" action="{{ route('events.participants.destroy', [$event, $participant], false) }}" onsubmit="return confirm('Delete this participant? This action cannot be undone.')">
                                 @csrf
                                 @method('DELETE')
@@ -256,6 +274,21 @@
                                     <label for="participant_reference_{{ $participant->id }}" class="mb-1 block text-xs font-semibold text-slate-600">Reference number</label>
                                     <input id="participant_reference_{{ $participant->id }}" name="participant_reference" type="text" value="{{ $participant->reference_no }}" class="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
                                 </div>
+                                @if ($participant->child_teams_count === 0)
+                                    <div>
+                                        <label for="parent_participant_id_{{ $participant->id }}" class="mb-1 block text-xs font-semibold text-slate-600">Parent team</label>
+                                        <select id="parent_participant_id_{{ $participant->id }}" name="parent_participant_id" class="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                                            <option value="">Independent participant or team</option>
+                                            @foreach ($event->participants->whereNull('parent_participant_id') as $team)
+                                                @if ($team->id !== $participant->id)
+                                                    <option value="{{ $team->id }}" @selected($participant->parent_participant_id === $team->id)>{{ $team->name }}</option>
+                                                @endif
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                @else
+                                    <p class="text-xs text-slate-500">This team has subteams, so it cannot be assigned to another parent.</p>
+                                @endif
                                 <div>
                                     <label for="participant_image_{{ $participant->id }}" class="mb-1 block text-xs font-semibold text-slate-600">Replace profile picture</label>
                                     <input id="participant_image_{{ $participant->id }}" name="participant_image" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-500">

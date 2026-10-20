@@ -22,7 +22,7 @@ final class CompetitionScoreExporter
         $competition->load([
             'criteria' => fn ($query) => $query->orderBy('name'),
             'rankScores',
-            'results.participant',
+            'results.participant.parentTeam',
             'results.criterionScores',
         ]);
 
@@ -36,6 +36,8 @@ final class CompetitionScoreExporter
         ])->all();
         $rows = [];
         $usesCriteria = $competition->usesCriteriaScoring();
+        $usesRanking = $competition->usesRankingScoring();
+        $participantsById = $event->participants->keyBy('id');
 
         foreach ($event->participants as $participant) {
             $result = $results->get($participant->getKey());
@@ -78,7 +80,7 @@ final class CompetitionScoreExporter
 
             $hasSavedScore = $usesCriteria
                 ? ($criteriaSummary['rankable'] ?? false)
-                : $result?->wins !== null;
+                : ($usesRanking ? $result?->placement !== null : $result?->wins !== null);
             $gross = null;
 
             if ($hasNoEntry) {
@@ -86,7 +88,7 @@ final class CompetitionScoreExporter
             } elseif ($hasSavedScore) {
                 $gross = $usesCriteria
                     ? $criteriaSummary['gross']
-                    : (float) $result->wins;
+                    : (float) ($usesRanking ? $result->placement : $result->wins);
             }
 
             $deduction = $hasNoEntry ? 0.0 : ($gross === null ? null : (float) $result->deduction);
@@ -101,6 +103,7 @@ final class CompetitionScoreExporter
                 'judge_scores' => $judgeScores,
                 'judge_totals' => $judgeTotals,
                 'wins' => $hasNoEntry ? 0 : $result?->wins,
+                'placement' => $hasNoEntry ? null : $result?->placement,
                 'gross' => $gross,
                 'deduction' => $deduction,
                 'adjusted' => $usesCriteria
@@ -137,6 +140,7 @@ final class CompetitionScoreExporter
             'scoring_method' => $competition->scoring_method->label(),
             'judge_count' => $competition->judge_count,
             'uses_criteria' => $usesCriteria,
+            'uses_ranking' => $usesRanking,
             'status' => $competition->scoresAreFinalized()
                 ? 'Finalized'
                 : ($competition->hasSavedScores() ? 'Pending finalization' : 'Not started'),
@@ -144,6 +148,16 @@ final class CompetitionScoreExporter
             'criteria' => $criteria,
             'rows' => $rows,
             'criterion_ranks' => $criterionRanks,
+            'signature_teams' => $competition->results
+                ->filter(static fn ($result): bool => $result->has_entry)
+                ->map(static fn ($result) => $participantsById->get($result->participant_id))
+                ->filter()
+                ->map(static fn ($participant) => $participantsById->get($participant->parent_participant_id) ?? $participant)
+                ->unique('id')
+                ->sortBy('name')
+                ->pluck('name')
+                ->values()
+                ->all(),
         ];
     }
 
@@ -226,7 +240,7 @@ final class CompetitionScoreExporter
 
             $headers[] = 'Gross score';
         } else {
-            $headers[] = 'Wins';
+            $headers[] = $report['uses_ranking'] ? 'Entered rank' : 'Wins';
         }
 
         array_push($headers, 'Deduction', $report['uses_criteria'] ? 'Adjusted total' : 'Rank points', 'Leaderboard points');
@@ -259,7 +273,7 @@ final class CompetitionScoreExporter
 
                 $values[] = $row['gross'];
             } else {
-                $values[] = $row['wins'];
+                $values[] = $report['uses_ranking'] ? $row['placement'] : $row['wins'];
             }
 
             array_push($values, $row['deduction'], $row['adjusted'], $row['points']);
@@ -383,7 +397,7 @@ final class CompetitionScoreExporter
 
         foreach ($judgeTables as $judgeNumber) {
             foreach ($criterionGroups as $groupIndex => $criteria) {
-                [$headers, $widths] = $this->pdfColumns($report['uses_criteria'], $criteria, $judgeNumber);
+                [$headers, $widths] = $this->pdfColumns($report['uses_criteria'], $report['uses_ranking'], $criteria, $judgeNumber);
                 $headerCells = $this->pdfCellLines($headers, $widths);
                 $headerHeight = $this->pdfRowHeight($headerCells);
                 $headingHeight = $report['uses_criteria'] ? 26 + (count($criterionGroups) > 1 ? 12 : 0) : 0;
@@ -391,7 +405,7 @@ final class CompetitionScoreExporter
                 $tableHeight = $headingHeight + $headerHeight;
 
                 foreach ($report['rows'] as $index => $row) {
-                    $cells = $this->pdfCellLines($this->pdfRowValues($row, $criteria, $report['uses_criteria'], $judgeNumber), $widths);
+                    $cells = $this->pdfCellLines($this->pdfRowValues($row, $criteria, $report['uses_criteria'], $report['uses_ranking'], $judgeNumber), $widths);
                     $rowHeight = $this->pdfRowHeight($cells);
                     $preparedRows[] = ['index' => $index, 'cells' => $cells, 'height' => $rowHeight];
                     $tableHeight += $rowHeight;
@@ -503,6 +517,40 @@ final class CompetitionScoreExporter
             $hasTableOnPage = true;
         }
 
+        if ($report['signature_teams'] !== []) {
+            if ($cursor - 78 < 38) {
+                $pages[] = $content;
+                [$content, $cursor] = $this->pdfPageHeader($report);
+            } else {
+                $cursor -= 18;
+            }
+
+            $content .= $this->pdfDrawText('Team signatures', 30, $cursor - 2, 11, true);
+            $cursor -= 24;
+
+            foreach ($report['signature_teams'] as $team) {
+                $teamLines = $this->pdfWrapCell($team, 500, 9);
+                $height = count($teamLines) * 11 + 36;
+
+                if ($cursor - $height < 38) {
+                    $pages[] = $content;
+                    [$content, $cursor] = $this->pdfPageHeader($report);
+                    $content .= $this->pdfDrawText('Team signatures (continued)', 30, $cursor - 2, 11, true);
+                    $cursor -= 24;
+                }
+
+                foreach ($teamLines as $line) {
+                    $content .= $this->pdfDrawText($line, 30, $cursor - 2, 9, true);
+                    $cursor -= 11;
+                }
+
+                $cursor -= 12;
+                $content .= sprintf("0.35 0.35 0.35 RG 0.7 w 30 %.2F m 350 %.2F l S\n", $cursor, $cursor);
+                $content .= $this->pdfDrawText('Authorized representative / signature', 30, $cursor - 12, 8);
+                $cursor -= 36;
+            }
+        }
+
         $pages[] = $content;
 
         return $this->pdfDocument($pages);
@@ -517,7 +565,7 @@ final class CompetitionScoreExporter
      * @param  array<int, array{id: int, name: string, raw_name: string}>  $criteria
      * @return array{array<int, string>, array<int, float>}
      */
-    private function pdfColumns(bool $usesCriteria, array $criteria, ?int $judgeNumber): array
+    private function pdfColumns(bool $usesCriteria, bool $usesRanking, array $criteria, ?int $judgeNumber): array
     {
         if ($judgeNumber !== null) {
             $headers = ['Rank', 'Participant', 'Status'];
@@ -537,7 +585,7 @@ final class CompetitionScoreExporter
 
         if (! $usesCriteria || $criteria === []) {
             return [
-                ['Rank', 'Participant', 'Status', $usesCriteria ? 'Gross score' : 'Wins', 'Deduction', $usesCriteria ? 'Adjusted total' : 'Rank points', 'Leaderboard points'],
+                ['Rank', 'Participant', 'Status', $usesCriteria ? 'Gross score' : ($usesRanking ? 'Entered rank' : 'Wins'), 'Deduction', $usesCriteria ? 'Adjusted total' : 'Rank points', 'Leaderboard points'],
                 [38.0, 274.0, 78.0, 98.0, 98.0, 98.0, 98.0],
             ];
         }
@@ -614,7 +662,7 @@ final class CompetitionScoreExporter
      * @param  array<int, array{id: int, name: string, raw_name: string}>  $criteria
      * @return array<int, string>
      */
-    private function pdfRowValues(array $row, array $criteria, bool $usesCriteria, ?int $judgeNumber): array
+    private function pdfRowValues(array $row, array $criteria, bool $usesCriteria, bool $usesRanking, ?int $judgeNumber): array
     {
         $values = [$row['rank'] === null ? '-' : (string) $row['rank'], $row['participant'], $row['status']];
 
@@ -634,7 +682,9 @@ final class CompetitionScoreExporter
             }
         }
 
-        $values[] = $this->formattedNumber($usesCriteria ? $row['gross'] : $row['wins']);
+        $values[] = $usesRanking
+            ? ($row['placement'] === null ? '-' : (string) $row['placement'])
+            : $this->formattedNumber($usesCriteria ? $row['gross'] : $row['wins']);
         $values[] = $this->formattedNumber($row['deduction']);
         $values[] = $this->formattedNumber($row['adjusted']);
         $values[] = $this->formattedNumber($row['points']);

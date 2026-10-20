@@ -39,6 +39,51 @@ final class ParticipantAndContestConfigurationTest extends TestCase
         Storage::disk('public')->assertExists($participant->profile_picture_path);
     }
 
+    public function test_subteam_can_be_added_to_a_team_in_the_same_event_but_cannot_be_nested_or_cross_events(): void
+    {
+        $auditor = User::factory()->create();
+        $event = Event::factory()->create();
+        $anotherEvent = Event::factory()->create();
+        $teamA = $event->participants()->create(['name' => 'TEAM A']);
+        $outsideTeam = $anotherEvent->participants()->create(['name' => 'Other Event Team']);
+
+        $this->actingAs($auditor)->post(route('events.participants.store', $event), [
+            'participant_name' => 'TEAM A2',
+            'parent_participant_id' => $teamA->id,
+        ])->assertRedirect(route('events.show', $event));
+
+        $subteam = $event->participants()->where('name', 'TEAM A2')->sole();
+        $this->assertSame($teamA->id, $subteam->parent_participant_id);
+        $this->actingAs($auditor)->get(route('events.show', $event))
+            ->assertSee('Points roll up to TEAM A');
+
+        $this->actingAs($auditor)->post(route('events.participants.store', $event), [
+            'participant_name' => 'Invalid nested team',
+            'parent_participant_id' => $subteam->id,
+        ])->assertSessionHasErrors('parent_participant_id');
+        $this->actingAs($auditor)->post(route('events.participants.store', $event), [
+            'participant_name' => 'Invalid outside team',
+            'parent_participant_id' => $outsideTeam->id,
+        ])->assertSessionHasErrors('parent_participant_id');
+
+        $this->assertDatabaseCount('participants', 3);
+
+        $this->actingAs($auditor)->patch(route('events.participants.update', [$event, $teamA]), [
+            'participant_name' => 'TEAM A',
+            'parent_participant_id' => $subteam->id,
+        ])->assertSessionHasErrors('parent_participant_id');
+
+        $this->actingAs($auditor)->delete(route('events.participants.destroy', [$event, $teamA]))
+            ->assertSessionHasErrors('participant');
+        $this->assertModelExists($teamA);
+
+        $this->actingAs($auditor)->patch(route('events.participants.update', [$event, $subteam]), [
+            'participant_name' => 'TEAM A2',
+            'parent_participant_id' => '',
+        ])->assertRedirect();
+        $this->assertNull($subteam->refresh()->parent_participant_id);
+    }
+
     public function test_participant_can_be_edited_and_profile_picture_replaced(): void
     {
         Storage::fake('public');

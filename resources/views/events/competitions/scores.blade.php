@@ -129,7 +129,7 @@
             $hasSavedScores = $resultsByParticipant->contains(function ($result) use ($competition) {
                 return $result->has_entry && ($competition->usesCriteriaScoring()
                     ? $result->criteriaScoreSummary($competition)['rankable']
-                    : $result->wins !== null);
+                    : ($competition->usesRankingScoring() ? $result->placement !== null : $result->wins !== null));
             });
         @endphp
 
@@ -148,8 +148,12 @@
                 <div>
                     <h3 class="text-lg font-semibold text-slate-950">Score sheet</h3>
                     <p class="mt-1 text-sm text-slate-500">Uncheck Has entry to exclude a participant from rankings, podium results, and non-podium points. Save a base score before entering a deduction.</p>
-                    <p class="mt-1 text-xs text-slate-400">Tie ranking: {{ $event->tie_ranking_method->label() }}.</p>
-                    @if (! $competition->usesCriteriaScoring())
+                    @unless ($competition->usesRankingScoring())
+                        <p class="mt-1 text-xs text-slate-400">Tie ranking: {{ $event->tie_ranking_method->label() }}.</p>
+                    @endunless
+                    @if ($competition->usesRankingScoring())
+                        <p class="mt-1 text-xs text-slate-500">Enter each participating team's unique finishing rank, starting at 1. Mark non-entrants as No entry. All ranks must be consecutive before finalization.</p>
+                    @elseif (! $competition->usesCriteriaScoring())
                         <p class="mt-1 text-xs text-slate-500">Wins determine rank. Deductions reduce awarded rank points, not wins.</p>
                     @endif
                     @if ($competition->usesCriteriaScoring() && $competition->judge_count > 1)
@@ -170,6 +174,22 @@
                     <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Read only for auditors</span>
                 @endif
             </div>
+
+            @if ($event->participants->contains(fn ($participant) => $participant->parent_participant_id !== null))
+                <div class="border-b border-slate-200 bg-maroon-50/50 px-6 py-4">
+                    @if ($canEditScores)
+                        <label class="inline-flex cursor-pointer items-start gap-3 text-sm font-semibold text-maroon-900">
+                            <input type="checkbox" name="exclude_subteams" value="1" @checked(old('exclude_subteams')) class="mt-0.5 h-4 w-4 rounded border-maroon-300 text-maroon-700 focus:ring-maroon-600">
+                            <span>Automatically exclude all linked subteams on save
+                                <span class="mt-1 block text-xs font-normal text-slate-600">Marks teams such as TEAM A2 as No entry for this contest only, and clears their saved scores and deductions. Main teams remain entered.</span>
+                            </span>
+                        </label>
+                        @error('exclude_subteams')<p class="mt-2 text-xs text-red-600">{{ $message }}</p>@enderror
+                    @else
+                        <p class="text-sm text-slate-600">Linked subteams can be excluded by an administrator after finalization.</p>
+                    @endif
+                </div>
+            @endif
 
             <div class="overflow-x-auto">
                 <table class="w-full min-w-[1020px] text-left text-sm">
@@ -200,7 +220,7 @@
                                     </th>
                                 @endforeach
                             @else
-                                <th class="px-6 py-3.5 font-semibold">Total wins</th>
+                                <th class="px-6 py-3.5 font-semibold">{{ $competition->usesRankingScoring() ? 'Finishing rank' : 'Total wins' }}</th>
                             @endif
                             <th class="px-6 py-3.5 text-center font-semibold">Deduction</th>
                             <th class="px-6 py-3.5 text-right font-semibold">{{ $competition->usesCriteriaScoring() ? 'Adjusted total' : 'Rank points after deduction' }}</th>
@@ -219,7 +239,7 @@
                                 $hasEntry = (bool) old($entryField, $result?->has_entry ?? true);
                                 $hasSavedScore = $competition->usesCriteriaScoring()
                                     ? ($criteriaSummary['rankable'] ?? false)
-                                    : $result?->wins !== null;
+                                    : ($competition->usesRankingScoring() ? $result?->placement !== null : $result?->wins !== null);
                             @endphp
                             <tr data-rank="{{ $standing['rank'] ?? '' }}" class="align-middle hover:bg-slate-50/70">
                                 @if ($hasRankings)
@@ -239,6 +259,9 @@
                                         <span>
                                             <span class="block font-semibold text-slate-900">{{ $participant->name }}</span>
                                             <span class="block text-xs text-slate-400">{{ $participant->reference_no ?: 'No reference number' }}</span>
+                                            @if ($participant->parent_participant_id !== null)
+                                                <span class="mt-0.5 block text-xs font-medium text-maroon-700">Linked subteam</span>
+                                            @endif
                                         </span>
                                     </div>
                                 </td>
@@ -273,6 +296,12 @@
                                             @endif
                                         </td>
                                     @endforeach
+                                @elseif ($competition->usesRankingScoring())
+                                    @php($field = "placements.{$participant->id}")
+                                    <td class="px-6 py-4">
+                                        <input name="placements[{{ $participant->id }}]" type="number" min="1" max="{{ $event->participants->count() }}" step="1" value="{{ old($field, $result?->placement) }}" @disabled(! $canEditScores) class="h-10 w-36 rounded-lg border border-slate-300 px-3 text-sm outline-none transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10" aria-label="Finishing rank for {{ $participant->name }}">
+                                        @error($field)<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                    </td>
                                 @else
                                     @php($field = "wins.{$participant->id}")
                                     <td class="px-6 py-4">

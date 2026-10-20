@@ -72,6 +72,8 @@
                 <p class="text-xs text-slate-500">
                     @if ($competition->usesCriteriaScoring())
                         Criteria configuration is active for this contest.
+                    @elseif ($competition->usesRankingScoring())
+                        Auditors enter finishing positions directly. Rank points are awarded from this configuration.
                     @else
                         Wins-based standings are active. Existing criteria are preserved but paused.
                     @endif

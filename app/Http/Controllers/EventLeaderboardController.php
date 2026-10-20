@@ -21,7 +21,7 @@ final class EventLeaderboardController extends Controller
             'categories.competitions' => fn ($query) => $query->orderBy('name'),
             'categories.competitions.criteria',
             'categories.competitions.rankScores',
-            'categories.competitions.results.participant',
+            'categories.competitions.results.participant.parentTeam',
             'categories.competitions.results.criterionScores',
         ]);
 

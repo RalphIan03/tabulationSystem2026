@@ -719,6 +719,237 @@ final class CompetitionScoringTest extends TestCase
         ])->assertSessionHasErrors("deductions.{$alex->id}");
     }
 
+    public function test_auditor_can_enter_rank_order_and_must_complete_consecutive_positions_before_finalizing(): void
+    {
+        $auditor = User::factory()->create(['role' => AccountRole::Auditor]);
+        $event = Event::factory()->create();
+        $alex = $event->participants()->create(['name' => 'Alex Santos']);
+        $bea = $event->participants()->create(['name' => 'Bea Cruz']);
+        $carlo = $event->participants()->create(['name' => 'Carlo Reyes']);
+        $category = $event->categories()->create(['name' => 'Sports']);
+
+        $this->actingAs($auditor)->post(route('events.categories.competitions.store', [$event, $category]), [
+            'competition_name' => 'Relay',
+            'scoring_method' => CompetitionScoringMethod::Ranking->value,
+        ])->assertRedirect();
+
+        $competition = $category->competitions()->sole();
+        $competition->rankScores()->createMany([
+            ['rank' => 1, 'points' => 100],
+            ['rank' => 2, 'points' => 60],
+        ]);
+        $routeParameters = [$event, $category, $competition];
+
+        $this->actingAs($auditor)->get(route('events.categories.competitions.scores.edit', $routeParameters))
+            ->assertSee('Finishing rank')
+            ->assertSee('name="placements['.$alex->id.']"', false);
+
+        $this->actingAs($auditor)->patch(route('events.categories.competitions.scores.update', $routeParameters), [
+            'placements' => [$alex->id => 1, $bea->id => 1, $carlo->id => 3],
+        ])->assertSessionHasErrors("placements.{$bea->id}");
+        $this->assertDatabaseCount('competition_results', 0);
+
+        $this->actingAs($auditor)->patch(route('events.categories.competitions.scores.update', $routeParameters), [
+            'placements' => [$alex->id => 1, $bea->id => 3, $carlo->id => 3],
+            'entries' => [$alex->id => 1, $bea->id => 1, $carlo->id => 0],
+        ])->assertRedirect();
+
+        $this->actingAs($auditor)->patch(route('events.categories.competitions.scores.finalization.update', $routeParameters))
+            ->assertSessionHasErrors('finalization');
+
+        $this->actingAs($auditor)->patch(route('events.categories.competitions.scores.update', $routeParameters), [
+            'placements' => [$alex->id => 2, $bea->id => 1, $carlo->id => null],
+            'entries' => [$alex->id => 1, $bea->id => 1, $carlo->id => 0],
+        ])->assertRedirect();
+
+        $standings = app(LeaderboardCalculator::class)->competitionStandings($competition->fresh());
+        $this->assertSame([$bea->id, $alex->id], $standings->pluck('participant.id')->all());
+        $this->assertSame([1, 2], $standings->pluck('rank')->all());
+        $this->assertSame([100.0, 60.0], $standings->pluck('leaderboard_points')->all());
+
+        $this->actingAs($auditor)->patch(route('events.categories.competitions.scores.finalization.update', $routeParameters))
+            ->assertRedirect();
+        $this->assertNotNull($competition->refresh()->scores_finalized_at);
+
+        $this->actingAs($auditor)->patch(route('events.categories.competitions.scores.update', $routeParameters), [
+            'placements' => [$alex->id => 1],
+        ])->assertForbidden();
+    }
+
+    public function test_subteams_accumulate_rank_points_under_their_parent_team_overall(): void
+    {
+        $event = Event::factory()->create();
+        $teamA = $event->participants()->create(['name' => 'TEAM A']);
+        $teamA2 = $event->participants()->create(['name' => 'TEAM A2', 'parent_participant_id' => $teamA->id]);
+        $teamB = $event->participants()->create(['name' => 'TEAM B']);
+        $category = $event->categories()->create(['name' => 'Sports']);
+        $relay = $category->competitions()->create([
+            'name' => 'Relay',
+            'scoring_method' => CompetitionScoringMethod::Ranking,
+        ]);
+        $relay->rankScores()->createMany([
+            ['rank' => 1, 'points' => 100],
+            ['rank' => 2, 'points' => 50],
+            ['rank' => 3, 'points' => 20],
+        ]);
+        $relay->results()->createMany([
+            ['participant_id' => $teamA->id, 'placement' => 1],
+            ['participant_id' => $teamA2->id, 'placement' => 2],
+            ['participant_id' => $teamB->id, 'placement' => 3],
+        ]);
+        $sprint = $category->competitions()->create([
+            'name' => 'Sprint',
+            'scoring_method' => CompetitionScoringMethod::Ranking,
+        ]);
+        $sprint->rankScores()->createMany([
+            ['rank' => 1, 'points' => 80],
+            ['rank' => 2, 'points' => 40],
+        ]);
+        $sprint->results()->createMany([
+            ['participant_id' => $teamA2->id, 'placement' => 1],
+            ['participant_id' => $teamB->id, 'placement' => 2],
+        ]);
+
+        $overall = app(LeaderboardCalculator::class)->overallStandings($event);
+
+        $this->assertSame(['TEAM A', 'TEAM B'], $overall->pluck('participant.name')->all());
+        $this->assertSame(230.0, $overall->first()['leaderboard_points']);
+        $this->assertSame(2, $overall->first()['contest_wins']);
+        $this->assertSame(2, $overall->first()['contests_entered']);
+        $this->assertSame(60.0, $overall->last()['leaderboard_points']);
+
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        $csv = $this->actingAs($admin)->get(route('events.results.download', $event));
+        $csv->assertOk();
+        $csvContent = $csv->streamedContent();
+        $this->assertStringContainsString('"TEAM A",2,0,230,2', $csvContent);
+        $this->assertStringContainsString('"Entered rank","Rank points",Deduction,"Leaderboard points"', $csvContent);
+    }
+
+    public function test_score_sheet_can_exclude_all_linked_subteams_from_one_criteria_contest(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        $event = Event::factory()->create();
+        $teamA = $event->participants()->create(['name' => 'TEAM A']);
+        $teamA2 = $event->participants()->create(['name' => 'TEAM A2', 'parent_participant_id' => $teamA->id]);
+        $teamB = $event->participants()->create(['name' => 'TEAM B']);
+        $teamB2 = $event->participants()->create(['name' => 'TEAM B2', 'parent_participant_id' => $teamB->id]);
+        $category = $event->categories()->create(['name' => 'Arts']);
+        $competition = $category->competitions()->create(['name' => 'Performance']);
+        $criterion = $competition->criteria()->create(['name' => 'Technique', 'max_score' => 100]);
+        $previousResult = $competition->results()->create([
+            'participant_id' => $teamA2->id,
+            'deduction' => 5,
+        ]);
+        $previousResult->criterionScores()->create(['criterion_id' => $criterion->id, 'score' => 80]);
+        $otherContest = $category->competitions()->create(['name' => 'Presentation']);
+        $otherContest->results()->create(['participant_id' => $teamA2->id, 'wins' => 2]);
+        $routeParameters = [$event, $category, $competition];
+
+        $this->actingAs($admin)
+            ->get(route('events.categories.competitions.scores.edit', $routeParameters))
+            ->assertSee('Automatically exclude all linked subteams on save')
+            ->assertSee('name="exclude_subteams"', false);
+
+        $this->actingAs($admin)
+            ->patch(route('events.categories.competitions.scores.update', $routeParameters), [
+                'exclude_subteams' => 1,
+                'entries' => [$teamA->id => 1, $teamA2->id => 1, $teamB->id => 1, $teamB2->id => 1],
+                'scores' => [
+                    $teamA->id => [$criterion->id => 90],
+                    $teamA2->id => [$criterion->id => 80],
+                    $teamB->id => [$criterion->id => 70],
+                    $teamB2->id => [$criterion->id => 60],
+                ],
+            ])->assertRedirect();
+
+        foreach ([$teamA2, $teamB2] as $subteam) {
+            $result = $competition->results()->where('participant_id', $subteam->id)->sole();
+            $this->assertFalse($result->has_entry);
+            $this->assertSame('0.00', $result->deduction);
+            $this->assertDatabaseMissing('criterion_scores', ['competition_result_id' => $result->id]);
+        }
+
+        $standings = app(LeaderboardCalculator::class)->competitionStandings($competition->fresh());
+        $this->assertSame([$teamA->id, $teamB->id], $standings->pluck('participant.id')->all());
+        $this->assertDatabaseHas('competition_results', [
+            'competition_id' => $otherContest->id,
+            'participant_id' => $teamA2->id,
+            'has_entry' => true,
+        ]);
+    }
+
+    public function test_bulk_subteam_exclusion_clears_saved_wins_without_affecting_main_teams(): void
+    {
+        $auditor = User::factory()->create(['role' => AccountRole::Auditor]);
+        $event = Event::factory()->create();
+        $teamA = $event->participants()->create(['name' => 'TEAM A']);
+        $teamA2 = $event->participants()->create(['name' => 'TEAM A2', 'parent_participant_id' => $teamA->id]);
+        $category = $event->categories()->create(['name' => 'Sports']);
+        $competition = $category->competitions()->create([
+            'name' => 'Basketball',
+            'scoring_method' => CompetitionScoringMethod::Wins,
+        ]);
+        $competition->results()->create(['participant_id' => $teamA2->id, 'wins' => 5, 'deduction' => 2]);
+
+        $this->actingAs($auditor)
+            ->patch(route('events.categories.competitions.scores.update', [$event, $category, $competition]), [
+                'exclude_subteams' => 1,
+                'entries' => [$teamA->id => 1, $teamA2->id => 1],
+                'wins' => [$teamA->id => 4, $teamA2->id => 'invalid old score'],
+            ])->assertRedirect();
+
+        $this->assertDatabaseHas('competition_results', [
+            'competition_id' => $competition->id,
+            'participant_id' => $teamA->id,
+            'has_entry' => true,
+            'wins' => 4,
+        ]);
+        $this->assertDatabaseHas('competition_results', [
+            'competition_id' => $competition->id,
+            'participant_id' => $teamA2->id,
+            'has_entry' => false,
+            'wins' => null,
+            'deduction' => 0,
+        ]);
+    }
+
+    public function test_bulk_subteam_exclusion_ignores_their_duplicate_ranks_and_allows_finalization(): void
+    {
+        $auditor = User::factory()->create(['role' => AccountRole::Auditor]);
+        $event = Event::factory()->create();
+        $teamA = $event->participants()->create(['name' => 'TEAM A']);
+        $teamA2 = $event->participants()->create(['name' => 'TEAM A2', 'parent_participant_id' => $teamA->id]);
+        $teamB = $event->participants()->create(['name' => 'TEAM B']);
+        $category = $event->categories()->create(['name' => 'Sports']);
+        $competition = $category->competitions()->create([
+            'name' => 'Relay',
+            'scoring_method' => CompetitionScoringMethod::Ranking,
+        ]);
+        $routeParameters = [$event, $category, $competition];
+
+        $this->actingAs($auditor)
+            ->patch(route('events.categories.competitions.scores.update', $routeParameters), [
+                'exclude_subteams' => 1,
+                'entries' => [$teamA->id => 1, $teamA2->id => 1, $teamB->id => 1],
+                'placements' => [$teamA->id => 1, $teamA2->id => 1, $teamB->id => 2],
+            ])->assertRedirect();
+
+        $this->assertDatabaseHas('competition_results', [
+            'competition_id' => $competition->id,
+            'participant_id' => $teamA2->id,
+            'has_entry' => false,
+            'placement' => null,
+        ]);
+        $this->assertSame([$teamA->id, $teamB->id], app(LeaderboardCalculator::class)
+            ->competitionStandings($competition->fresh())->pluck('participant.id')->all());
+
+        $this->actingAs($auditor)
+            ->patch(route('events.categories.competitions.scores.finalization.update', $routeParameters))
+            ->assertRedirect();
+        $this->assertNotNull($competition->refresh()->scores_finalized_at);
+    }
+
     public function test_admin_can_override_scores_and_deductions_after_finalization(): void
     {
         $admin = User::factory()->create(['role' => AccountRole::Admin]);

@@ -66,6 +66,32 @@ final class PublicLeaderboardTest extends TestCase
             ->assertJsonPath('categories.0.contests.0.rows.1.name', 'Bea Cruz');
     }
 
+    public function test_public_overall_combines_subteam_rank_points_under_parent_team(): void
+    {
+        $event = Event::factory()->create();
+        $teamA = $event->participants()->create(['name' => 'TEAM A']);
+        $teamA2 = $event->participants()->create(['name' => 'TEAM A2', 'parent_participant_id' => $teamA->id]);
+        $category = $event->categories()->create(['name' => 'Sports']);
+        $competition = $category->competitions()->create([
+            'name' => 'Relay',
+            'scoring_method' => CompetitionScoringMethod::Ranking,
+            'scores_finalized_at' => now(),
+        ]);
+        $competition->rankScores()->createMany([
+            ['rank' => 1, 'points' => 100],
+            ['rank' => 2, 'points' => 50],
+        ]);
+        $competition->results()->createMany([
+            ['participant_id' => $teamA2->id, 'placement' => 1],
+            ['participant_id' => $teamA->id, 'placement' => 2],
+        ]);
+
+        $this->getJson(route('leaderboards.data', $event))
+            ->assertJsonCount(1, 'rows')
+            ->assertJsonPath('rows.0.name', 'TEAM A')
+            ->assertJsonPath('rows.0.points', 150);
+    }
+
     public function test_participant_and_rank_configuration_changes_refresh_cached_public_snapshot(): void
     {
         $event = Event::factory()->create();

@@ -74,18 +74,24 @@ final class EventController extends Controller
         }
 
         $event->load([
-            'participants' => fn ($query) => $query->orderBy('name'),
+            'participants' => fn ($query) => $query->withCount('childTeams')->orderBy('name'),
             'categories' => fn ($query) => $query->orderBy('name'),
             'categories.competitions' => fn ($query) => $query
                 ->withCount([
                     'criteria',
-                    'results' => fn ($resultQuery) => $resultQuery->where('has_entry', true),
+                    'results' => fn ($resultQuery) => $resultQuery
+                        ->where('has_entry', true)
+                        ->where(fn ($scoreQuery) => $scoreQuery
+                            ->whereNotNull('wins')
+                            ->orWhereNotNull('placement')
+                            ->orWhereHas('criterionScores')),
                 ])
                 ->withExists([
                     'results as has_saved_scores' => fn ($query) => $query
                         ->where('has_entry', true)
                         ->where(fn ($scoreQuery) => $scoreQuery
                             ->whereNotNull('wins')
+                            ->orWhereNotNull('placement')
                             ->orWhereHas('criterionScores')),
                 ])
                 ->orderBy('name'),

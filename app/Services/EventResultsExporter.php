@@ -24,7 +24,7 @@ final class EventResultsExporter
             'categories.competitions' => fn ($query) => $query->orderBy('name'),
             'categories.competitions.criteria',
             'categories.competitions.rankScores',
-            'categories.competitions.results.participant',
+            'categories.competitions.results.participant.parentTeam',
             'categories.competitions.results.criterionScores',
         ]);
 
@@ -53,7 +53,9 @@ final class EventResultsExporter
                 $this->row($stream, ['Score status', $competition->scoresAreFinalized() ? 'Finalized' : 'Not finalized']);
                 $this->row($stream, $competition->usesCriteriaScoring()
                     ? ['Rank', 'Participant', 'Gross score', 'Deduction', 'Final score', 'Wins', 'Leaderboard points']
-                    : ['Rank', 'Participant', 'Wins', 'Rank points', 'Deduction', 'Leaderboard points']);
+                    : ($competition->usesRankingScoring()
+                        ? ['Rank', 'Participant', 'Entered rank', 'Rank points', 'Deduction', 'Leaderboard points']
+                        : ['Rank', 'Participant', 'Wins', 'Rank points', 'Deduction', 'Leaderboard points']));
 
                 foreach ($this->leaderboard->competitionStandings($competition, $event) as $result) {
                     $this->row($stream, $competition->usesCriteriaScoring()
@@ -69,7 +71,7 @@ final class EventResultsExporter
                         : [
                             $result['rank'],
                             $result['participant']->name,
-                            $result['wins'],
+                            $competition->usesRankingScoring() ? $result['placement'] : $result['wins'],
                             $result['rank_points'],
                             $result['deduction'],
                             $result['leaderboard_points'],

@@ -178,6 +178,45 @@ final class CompetitionScoreExportTest extends TestCase
         $this->assertStringContainsString('<c r="F10"><v>50</v></c><c r="G10"><v>40</v></c>', $sheet);
     }
 
+    public function test_rank_order_pdf_ends_with_one_signature_per_participating_parent_team(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        $event = Event::factory()->create(['name' => 'Team Games']);
+        $category = $event->categories()->create(['name' => 'Sports']);
+        $competition = $category->competitions()->create([
+            'name' => 'Relay',
+            'scoring_method' => CompetitionScoringMethod::Ranking,
+            'scores_finalized_at' => now(),
+        ]);
+        $competition->rankScores()->createMany([
+            ['rank' => 1, 'points' => 100],
+            ['rank' => 2, 'points' => 50],
+        ]);
+        $teamA = $event->participants()->create(['name' => 'TEAM A']);
+        $teamA2 = $event->participants()->create(['name' => 'TEAM A2', 'parent_participant_id' => $teamA->id]);
+        $teamB = $event->participants()->create(['name' => 'TEAM B']);
+        $competition->results()->createMany([
+            ['participant_id' => $teamA2->id, 'placement' => 1],
+            ['participant_id' => $teamB->id, 'placement' => 2],
+            ['participant_id' => $teamA->id, 'placement' => 3],
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('events.categories.competitions.scores.export', [
+            $event, $category, $competition, 'format' => 'pdf',
+        ]));
+
+        $response->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $content = $response->getContent();
+        $this->assertStringContainsString('Td (Entered rank) Tj ET', $content);
+        $this->assertStringContainsString('Td (Team signatures) Tj ET', $content);
+        $this->assertStringContainsString('Td (Authorized representative / signature) Tj ET', $content);
+        $signatures = substr($content, strpos($content, 'Td (Team signatures) Tj ET'));
+        $this->assertStringContainsString('Td (TEAM A) Tj ET', $signatures);
+        $this->assertStringContainsString('Td (TEAM B) Tj ET', $signatures);
+        $this->assertStringNotContainsString('Td (TEAM A2) Tj ET', $signatures);
+        $this->assertSame(2, substr_count($signatures, 'Td (Authorized representative / signature) Tj ET'));
+    }
+
     public function test_criteria_pdf_displays_zero_scores_for_no_entry_on_one_landscape_page(): void
     {
         $admin = User::factory()->create(['role' => AccountRole::Admin]);
@@ -286,7 +325,8 @@ final class CompetitionScoreExportTest extends TestCase
         $this->assertStringContainsString('<c r="A17" t="inlineStr"><is><t xml:space="preserve">Judge 2 scores</t>', $sheet);
         $this->assertStringContainsString('<c r="D19"><v>100</v></c><c r="E19"><v>40</v></c><c r="F19"><v>140</v></c>', $sheet);
         $this->assertStringContainsString('Judges: 2', $pdf->getContent());
-        $this->assertStringContainsString('/Count 1', $pdf->getContent());
+        $this->assertStringContainsString('/Count 2', $pdf->getContent());
+        $this->assertStringContainsString('Td (Team signatures) Tj ET', $pdf->getContent());
         $this->assertStringContainsString('Td (Averaged scores) Tj ET', $pdf->getContent());
         $this->assertStringContainsString('Td (Judge 1 scores) Tj ET', $pdf->getContent());
         $this->assertStringContainsString('Td (Judge 2 scores) Tj ET', $pdf->getContent());

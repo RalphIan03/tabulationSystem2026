@@ -11,6 +11,7 @@ use App\Models\Participant;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use Throwable;
 
@@ -33,6 +34,7 @@ final class ParticipantController extends Controller
             $event->participants()->create([
                 'name' => $request->validated('participant_name'),
                 'reference_no' => $request->validated('participant_reference'),
+                'parent_participant_id' => $request->validated('parent_participant_id'),
                 'profile_picture_path' => $profilePicturePath,
             ]);
         } catch (Throwable $exception) {
@@ -71,6 +73,9 @@ final class ParticipantController extends Controller
             $participant->update([
                 'name' => $request->validated('participant_name'),
                 'reference_no' => $request->validated('participant_reference'),
+                'parent_participant_id' => $request->has('parent_participant_id')
+                    ? $request->validated('parent_participant_id')
+                    : $participant->parent_participant_id,
                 'profile_picture_path' => $profilePicturePath,
             ]);
         } catch (Throwable $exception) {
@@ -94,6 +99,12 @@ final class ParticipantController extends Controller
 
     public function destroy(Request $request, Event $event, Participant $participant): RedirectResponse
     {
+        if ($participant->childTeams()->exists()) {
+            throw ValidationException::withMessages([
+                'participant' => 'Reassign or remove this team\'s subteams before deleting it.',
+            ]);
+        }
+
         if ($request->user()?->isAdmin() !== true) {
             abort_if($participant->competitionResults()
                 ->whereHas('competition', static fn ($query) => $query->whereNotNull('scores_finalized_at'))

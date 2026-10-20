@@ -10,7 +10,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 final class Participant extends Model
 {
-    protected $fillable = ['name', 'reference_no', 'profile_picture_path'];
+    protected $fillable = ['name', 'reference_no', 'profile_picture_path', 'parent_participant_id'];
+
+    public function parentTeam(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_participant_id');
+    }
+
+    public function childTeams(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_participant_id');
+    }
 
     public function event(): BelongsTo
     {
