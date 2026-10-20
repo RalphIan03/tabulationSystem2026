@@ -9,12 +9,35 @@ use App\Enums\CompetitionScoringMethod;
 use App\Models\Event;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 use ZipArchive;
 
 final class CompetitionScoreExportTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_download_links_stay_on_https_when_the_proxy_generates_http_urls(): void
+    {
+        $auditor = User::factory()->create(['role' => AccountRole::Auditor]);
+        $event = Event::factory()->create();
+        $category = $event->categories()->create(['name' => 'Arts']);
+        $competition = $category->competitions()->create(['name' => 'Painting']);
+        $parameters = [$event, $category, $competition];
+        URL::forceScheme('http');
+
+        $response = $this->actingAs($auditor)->get(
+            'https://tabulation.example'.route('events.categories.competitions.scores.edit', $parameters, false),
+        );
+
+        foreach (['xlsx', 'pdf'] as $format) {
+            $path = route('events.categories.competitions.scores.export', [...$parameters, 'format' => $format], false);
+            $response->assertSee('href="'.$path.'" download data-export-download', false);
+        }
+
+        $templatePath = route('events.categories.competitions.scores.template', $parameters, false);
+        $response->assertSee('href="'.$templatePath.'" download data-export-download', false);
+    }
 
     public function test_criteria_score_sheet_downloads_as_a_real_excel_workbook(): void
     {
