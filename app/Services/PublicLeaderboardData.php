@@ -17,7 +17,7 @@ final class PublicLeaderboardData
         private readonly EventReadCache $cache,
     ) {}
 
-    /** @return array{rows: array<int, array<string, float|int|string|null>>, categories: array<int, array<string, mixed>>} */
+    /** @return array{rows: array<int, array<string, mixed>>, categories: array<int, array<string, mixed>>, win_categories: array<int, array{id: int, name: string}>} */
     public function snapshot(Event $event, ?int $contestCategoryId = null): array
     {
         if ($contestCategoryId !== null) {
@@ -36,7 +36,7 @@ final class PublicLeaderboardData
         return $snapshot;
     }
 
-    /** @return array{rows: array<int, array<string, float|int|string|null>>, categories: array<int, array<string, mixed>>} */
+    /** @return array{rows: array<int, array<string, mixed>>, categories: array<int, array<string, mixed>>, win_categories: array<int, array{id: int, name: string}>} */
     private function buildSnapshot(Event $event): array
     {
         $event->load([
@@ -54,8 +54,14 @@ final class PublicLeaderboardData
                 'rank' => $index + 1,
                 ...$this->participantColumns($row['participant']),
                 'contest_wins' => $row['contest_wins'],
+                'category_wins' => $row['category_wins'],
                 'points' => $row['leaderboard_points'],
             ])->all();
+        $winCategories = $event->categories
+            ->map(static fn ($category): array => [
+                'id' => $category->getKey(),
+                'name' => $category->name,
+            ])->values()->all();
         $pendingContests = Competition::query()
             ->whereIn('category_id', $event->categories->modelKeys())
             ->whereNull('scores_finalized_at')
@@ -98,7 +104,11 @@ final class PublicLeaderboardData
                 ];
             })->values()->all();
 
-        return compact('rows', 'categories');
+        return [
+            'rows' => $rows,
+            'categories' => $categories,
+            'win_categories' => $winCategories,
+        ];
     }
 
     /** @return list<array<string, float|int|string|null>> */
@@ -155,6 +165,7 @@ final class PublicLeaderboardData
                 'rank' => $index + 1,
                 ...$this->participantColumns($row['participant']),
                 'contest_wins' => $row['contest_wins'],
+                'category_wins' => $row['category_wins'],
                 'points' => $row['leaderboard_points'],
             ])->all();
     }

@@ -89,7 +89,8 @@ final class PublicLeaderboardTest extends TestCase
         $this->getJson(route('leaderboards.data', $event))
             ->assertJsonCount(1, 'rows')
             ->assertJsonPath('rows.0.name', 'TEAM A')
-            ->assertJsonPath('rows.0.points', 150);
+            ->assertJsonMissingPath('rows.0.points');
+        $this->assertSame(150.0, app(PublicLeaderboardData::class)->snapshot($event)['rows'][0]['points']);
     }
 
     public function test_participant_and_rank_configuration_changes_refresh_cached_public_snapshot(): void
@@ -106,14 +107,16 @@ final class PublicLeaderboardTest extends TestCase
 
         $this->getJson(route('leaderboards.data', $event))
             ->assertJsonPath('rows.0.name', 'Alex Santos')
-            ->assertJsonPath('rows.0.points', 0);
+            ->assertJsonMissingPath('rows.0.points');
+        $this->assertSame(0.0, app(PublicLeaderboardData::class)->snapshot($event)['rows'][0]['points']);
 
         $participant->update(['name' => 'Alex Reyes']);
         $competition->rankScores()->create(['rank' => 1, 'points' => 100]);
 
         $this->getJson(route('leaderboards.data', $event))
             ->assertJsonPath('rows.0.name', 'Alex Reyes')
-            ->assertJsonPath('rows.0.points', 100);
+            ->assertJsonMissingPath('rows.0.points');
+        $this->assertSame(100.0, app(PublicLeaderboardData::class)->snapshot($event)['rows'][0]['points']);
     }
 
     public function test_bare_url_opens_the_most_recent_active_event_in_overall_view(): void
@@ -177,7 +180,9 @@ final class PublicLeaderboardTest extends TestCase
             ->assertSee('Contests by category')
             ->assertSee('Rankings appear after scores are finalized')
             ->assertSee('Basketball')
-            ->assertSee('const dataUrl =', false);
+            ->assertSee('const dataUrl =', false)
+            ->assertSee('new URL(dataUrl, window.location.href)', false)
+            ->assertViewHas('dataUrl', route('leaderboards.data', $event, false));
 
         $this->get(route('events.leaderboard', $event))->assertRedirect(route('login'));
     }
@@ -265,7 +270,7 @@ final class PublicLeaderboardTest extends TestCase
             ->assertJsonCount(1, 'rows')
             ->assertJsonPath('rows.0.name', 'Alex Santos')
             ->assertJsonPath('rows.0.contest_wins', 1)
-            ->assertJsonPath('rows.0.points', 100);
+            ->assertJsonMissingPath('rows.0.points');
 
         $this->getJson(route('leaderboards.data', $event))
             ->assertJsonPath('categories.0.contests.0.finalized', true)
@@ -457,6 +462,66 @@ final class PublicLeaderboardTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_overall_leaderboard_counts_first_place_finishes_for_each_category(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        $event = Event::factory()->create();
+        $teamA = $event->participants()->create(['name' => 'TEAM A']);
+        $teamA2 = $event->participants()->create(['name' => 'TEAM A2', 'parent_participant_id' => $teamA->id]);
+        $teamB = $event->participants()->create(['name' => 'TEAM B']);
+        $sports = $event->categories()->create(['name' => 'Sports']);
+        $arts = $event->categories()->create(['name' => 'Arts']);
+        $basketball = $sports->competitions()->create([
+            'name' => 'Basketball',
+            'scoring_method' => CompetitionScoringMethod::Wins,
+            'scores_finalized_at' => now(),
+        ]);
+        $relay = $sports->competitions()->create([
+            'name' => 'Relay',
+            'scoring_method' => CompetitionScoringMethod::Wins,
+            'scores_finalized_at' => now(),
+        ]);
+        $painting = $arts->competitions()->create([
+            'name' => 'Painting',
+            'scoring_method' => CompetitionScoringMethod::Wins,
+            'scores_finalized_at' => now(),
+        ]);
+        $basketball->results()->createMany([
+            ['participant_id' => $teamA->id, 'wins' => 5],
+            ['participant_id' => $teamB->id, 'wins' => 2],
+        ]);
+        $relay->results()->createMany([
+            ['participant_id' => $teamA2->id, 'wins' => 4],
+            ['participant_id' => $teamB->id, 'wins' => 1],
+        ]);
+        $painting->results()->createMany([
+            ['participant_id' => $teamA->id, 'wins' => 1],
+            ['participant_id' => $teamB->id, 'wins' => 3],
+        ]);
+
+        $this->getJson(route('leaderboards.data', $event))
+            ->assertOk()
+            ->assertJsonPath('rows.0.name', 'TEAM A')
+            ->assertJsonPath('rows.0.contest_wins', 2)
+            ->assertJsonPath("rows.0.category_wins.{$sports->id}", 2)
+            ->assertJsonPath("rows.0.category_wins.{$arts->id}", 0)
+            ->assertJsonPath('rows.1.name', 'TEAM B')
+            ->assertJsonPath("rows.1.category_wins.{$sports->id}", 0)
+            ->assertJsonPath("rows.1.category_wins.{$arts->id}", 1)
+            ->assertJsonPath('win_categories.0.name', 'Arts')
+            ->assertJsonPath('win_categories.1.name', 'Sports')
+            ->assertJsonMissingPath('rows.0.points');
+
+        $this->get(route('leaderboards.show', $event))
+            ->assertSee('Arts wins')
+            ->assertSee('Sports wins')
+            ->assertDontSee('>Total points</th>', false);
+        $this->actingAs($admin)
+            ->get(route('events.leaderboard', $event))
+            ->assertSee('Arts wins')
+            ->assertSee('Sports wins');
+    }
+
     public function test_public_leaderboard_requires_an_id_for_filtered_views(): void
     {
         $event = Event::factory()->create();
@@ -496,9 +561,10 @@ final class PublicLeaderboardTest extends TestCase
             ->assertJsonPath('rows.0.result', '84.50');
     }
 
-    public function test_freezing_hides_all_public_scores_until_unfrozen(): void
+    public function test_freezing_shows_only_total_points_and_unfreezing_shows_teams_and_wins(): void
     {
-        $event = Event::factory()->create(['leaderboard_frozen' => true]);
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        $event = Event::factory()->create();
         $participant = $event->participants()->create(['name' => 'Alex Santos']);
         $category = $event->categories()->create(['name' => 'Sports']);
         $competition = $category->competitions()->create([
@@ -506,24 +572,60 @@ final class PublicLeaderboardTest extends TestCase
             'scoring_method' => CompetitionScoringMethod::Wins,
             'scores_finalized_at' => now(),
         ]);
+        $competition->rankScores()->create(['rank' => 1, 'points' => 100]);
         $competition->results()->create(['participant_id' => $participant->id, 'wins' => 4]);
+
+        $this->getJson(route('leaderboards.data', $event))
+            ->assertJsonPath('rows.0.name', 'Alex Santos')
+            ->assertJsonPath('rows.0.contest_wins', 1)
+            ->assertJsonMissingPath('rows.0.points');
+        $this->get(route('leaderboards.show', $event))
+            ->assertSee('Alex Santos')
+            ->assertSee('Sports wins')
+            ->assertDontSee('>Total points</th>', false);
+
+        $this->actingAs($admin)
+            ->patch(route('events.leaderboard-freeze', $event))
+            ->assertRedirect();
+        $this->assertTrue($event->refresh()->leaderboard_frozen);
 
         $this->getJson(route('leaderboards.data', $event))
             ->assertOk()
             ->assertJsonPath('frozen', true)
-            ->assertJsonCount(0, 'rows')
+            ->assertJsonCount(1, 'rows')
+            ->assertJsonPath('rows.0.rank', 1)
+            ->assertJsonPath('rows.0.points', 100)
+            ->assertJsonMissingPath('rows.0.name')
+            ->assertJsonMissingPath('rows.0.contest_wins')
+            ->assertJsonCount(0, 'categories')
+            ->assertJsonCount(0, 'win_categories')
             ->assertDontSee('Alex Santos');
+
+        $this->getJson(route('leaderboards.data', [$event, 'scope' => 'game', 'competition_id' => $competition->id]))
+            ->assertJsonCount(0, 'rows');
+
+        $otherEvent = Event::factory()->create();
+        $otherCategory = $otherEvent->categories()->create(['name' => 'Other']);
+        $this->getJson(route('leaderboards.data', [$event, 'scope' => 'category', 'category_id' => $otherCategory->id]))
+            ->assertNotFound();
 
         $this->get(route('leaderboards.show', $event))
             ->assertOk()
-            ->assertSee('Public results frozen')
-            ->assertDontSee('Alex Santos');
+            ->assertSee('Points-only preview')
+            ->assertSee('>Total points</th>', false)
+            ->assertDontSee('Alex Santos')
+            ->assertDontSee('Sports wins')
+            ->assertDontSee('Basketball');
 
-        $event->update(['leaderboard_frozen' => false]);
+        $this->actingAs($admin)
+            ->patch(route('events.leaderboard-freeze', $event))
+            ->assertRedirect();
+        $this->assertFalse($event->refresh()->leaderboard_frozen);
 
         $this->getJson(route('leaderboards.data', $event))
             ->assertOk()
             ->assertJsonPath('frozen', false)
-            ->assertJsonPath('rows.0.name', 'Alex Santos');
+            ->assertJsonPath('rows.0.name', 'Alex Santos')
+            ->assertJsonMissingPath('rows.0.points');
     }
 }

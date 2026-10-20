@@ -33,7 +33,7 @@
 
     <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 class="font-semibold text-slate-950">Share the public leaderboard</h3>
-        <p class="mt-1 text-sm text-slate-500">The general link opens the active event automatically. Use the event-specific link to share this event directly. Freezing hides rankings from public visitors.</p>
+        <p class="mt-1 text-sm text-slate-500">The general link opens the active event automatically. Use the event-specific link to share this event directly. Freezing shows only total points publicly; unfreezing shows team names and wins instead.</p>
         <a href="{{ route('leaderboards.index') }}" target="_blank" rel="noopener noreferrer" class="mt-3 block break-all text-sm font-semibold text-maroon-700 hover:underline">{{ route('leaderboards.index') }}</a>
         <a href="{{ route('leaderboards.show', $event) }}" target="_blank" rel="noopener noreferrer" class="mt-2 block break-all text-xs font-medium text-slate-500 hover:underline">Event-specific: {{ route('leaderboards.show', $event) }}</a>
     </section>
@@ -42,7 +42,7 @@
         <div class="border-b border-slate-200 px-6 py-5">
             <p class="text-sm font-semibold text-maroon-700">Overall winner</p>
             <h3 class="mt-1 text-xl font-semibold text-slate-950">Overall standings by contest wins</h3>
-            <p class="mt-1 text-sm text-slate-500">First-place finishes are summed across contests. Recorded match wins and leaderboard points break ties.</p>
+            <p class="mt-1 text-sm text-slate-500">First-place finishes are summed across contests and shown by category. Recorded match wins and leaderboard points break ties.</p>
         </div>
 
         @if ($overallStandings->isNotEmpty())
@@ -70,6 +70,9 @@
                             <th class="px-6 py-3.5 font-semibold">Rank</th>
                             <th class="px-5 py-3.5 font-semibold">Participant</th>
                             <th class="px-5 py-3.5 text-center font-semibold">Contest wins</th>
+                            @foreach ($event->categories as $category)
+                                <th class="px-5 py-3.5 text-center font-semibold">{{ $category->name }} wins</th>
+                            @endforeach
                             <th class="px-5 py-3.5 text-center font-semibold">Recorded wins</th>
                             <th class="px-5 py-3.5 text-center font-semibold">Contests entered</th>
                             <!-- <th class="px-6 py-3.5 text-right font-semibold">Leaderboard points</th> -->
@@ -81,6 +84,9 @@
                                 <td class="px-6 py-4 font-bold text-slate-700">#{{ $index + 1 }}</td>
                                 <td class="px-5 py-4 font-semibold text-slate-900">{{ $row['participant']->name }}</td>
                                 <td class="px-5 py-4 text-center font-semibold text-maroon-700">{{ $row['contest_wins'] }}</td>
+                                @foreach ($event->categories as $category)
+                                    <td class="px-5 py-4 text-center text-slate-600">{{ $row['category_wins'][$category->id] ?? 0 }}</td>
+                                @endforeach
                                 <td class="px-5 py-4 text-center text-slate-600">{{ $row['recorded_wins'] }}</td>
                                 <td class="px-5 py-4 text-center text-slate-600">{{ $row['contests_entered'] }}</td>
                                 <!-- <td class="px-6 py-4 text-right font-semibold text-slate-700">{{ number_format($row['leaderboard_points'], 2) }}</td> -->

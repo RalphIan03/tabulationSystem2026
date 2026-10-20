@@ -44,16 +44,15 @@ final class PublicLeaderboardController extends Controller
     {
         $initialRows = [];
         $initialCategories = [];
+        $initialWinCategories = [];
 
         if ($event !== null) {
-            if (! $event->leaderboard_frozen) {
-                $snapshot = $this->leaderboard->snapshot($event);
-                $initialRows = $snapshot['rows'];
-                $initialCategories = $snapshot['categories'];
-            }
+            $snapshot = $this->leaderboard->snapshot($event);
+            $initialRows = $this->visibleRows($snapshot['rows'], $event->leaderboard_frozen);
 
-            if ($event->leaderboard_frozen) {
-                $event->load(['categories' => fn ($query) => $query->orderBy('name')]);
+            if (! $event->leaderboard_frozen) {
+                $initialCategories = $snapshot['categories'];
+                $initialWinCategories = $snapshot['win_categories'];
             }
         }
 
@@ -61,7 +60,8 @@ final class PublicLeaderboardController extends Controller
             'event' => $event,
             'initialRows' => $initialRows,
             'initialCategories' => $initialCategories,
-            'dataUrl' => $event === null ? null : route('leaderboards.data', $event),
+            'initialWinCategories' => $initialWinCategories,
+            'dataUrl' => $event === null ? null : route('leaderboards.data', $event, false),
         ])->header('Cache-Control', 'no-store, private');
     }
 
@@ -75,25 +75,49 @@ final class PublicLeaderboardController extends Controller
             'competition_id' => ['required_if:scope,game', 'nullable', 'integer'],
         ]);
 
-        $snapshot = ! $event->leaderboard_frozen && ($filters['scope'] ?? 'overall') === 'overall'
+        if ($event->leaderboard_frozen && ($filters['scope'] ?? 'overall') !== 'overall') {
+            if ($filters['scope'] === 'category') {
+                $event->categories()->findOrFail((int) $filters['category_id']);
+            } else {
+                $event->competitions()->findOrFail((int) $filters['competition_id']);
+            }
+
+            return response()->json([
+                'frozen' => true,
+                'rows' => [],
+                'categories' => [],
+                'win_categories' => [],
+            ])->header('Cache-Control', 'no-store, private');
+        }
+
+        $snapshot = ($filters['scope'] ?? 'overall') === 'overall'
             ? $this->leaderboard->snapshot(
                 $event,
                 isset($filters['category_id']) ? (int) $filters['category_id'] : null,
             )
             : null;
-        $rows = $event->leaderboard_frozen
-            ? []
-            : ($snapshot['rows'] ?? $this->leaderboard->rows(
-                $event,
-                $filters['scope'] ?? 'overall',
-                isset($filters['category_id']) ? (int) $filters['category_id'] : null,
-                isset($filters['competition_id']) ? (int) $filters['competition_id'] : null,
-            ));
+        $rows = $snapshot['rows'] ?? $this->leaderboard->rows(
+            $event,
+            $filters['scope'] ?? 'overall',
+            isset($filters['category_id']) ? (int) $filters['category_id'] : null,
+            isset($filters['competition_id']) ? (int) $filters['competition_id'] : null,
+        );
 
         return response()->json([
             'frozen' => $event->leaderboard_frozen,
-            'rows' => $rows,
-            'categories' => $snapshot['categories'] ?? [],
+            'rows' => $this->visibleRows($rows, $event->leaderboard_frozen),
+            'categories' => $event->leaderboard_frozen ? [] : ($snapshot['categories'] ?? []),
+            'win_categories' => $event->leaderboard_frozen ? [] : ($snapshot['win_categories'] ?? []),
         ])->header('Cache-Control', 'no-store, private');
+    }
+
+    /** @param array<int, array<string, mixed>> $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function visibleRows(array $rows, bool $frozen): array
+    {
+        return array_map(static fn (array $row): array => $frozen
+            ? ['rank' => $row['rank'], 'points' => $row['points']]
+            : array_diff_key($row, ['points' => true]), $rows);
     }
 }

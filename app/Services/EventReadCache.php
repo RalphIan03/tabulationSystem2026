@@ -91,7 +91,7 @@ final class EventReadCache
 
     private function leaderboardKey(int $eventId): string
     {
-        return "leaderboard:event:{$eventId}:snapshot:v3";
+        return "leaderboard:event:{$eventId}:snapshot:v4";
     }
 
     private function auditorEventsKey(): string

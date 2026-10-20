@@ -166,6 +166,7 @@ final class LeaderboardCalculator
      * @return Collection<int, array{
      *     participant: Participant,
      *     contest_wins: int,
+     *     category_wins: array<int, int>,
      *     recorded_wins: int,
      *     leaderboard_points: float,
      *     contests_entered: int
@@ -183,6 +184,7 @@ final class LeaderboardCalculator
         }
 
         $totals = [];
+        $emptyCategoryWins = array_fill_keys($event->categories->modelKeys(), 0);
 
         foreach ($event->categories as $category) {
             foreach ($category->competitions as $competition) {
@@ -195,6 +197,7 @@ final class LeaderboardCalculator
                     $totals[$participantId] ??= [
                         'participant' => $participant,
                         'contest_wins' => 0,
+                        'category_wins' => $emptyCategoryWins,
                         'recorded_wins' => 0,
                         'leaderboard_points' => 0.0,
                         'contests_entered' => 0,
@@ -202,6 +205,8 @@ final class LeaderboardCalculator
 
                     if ($row['rank'] === 1 && ! isset($winningTeams[$participantId])) {
                         $totals[$participantId]['contest_wins']++;
+                        $totals[$participantId]['category_wins'][$category->getKey()] =
+                            ($totals[$participantId]['category_wins'][$category->getKey()] ?? 0) + 1;
                         $winningTeams[$participantId] = true;
                     }
 

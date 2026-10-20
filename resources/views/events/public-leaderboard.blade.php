@@ -20,7 +20,7 @@
             <h1 class="mt-2 text-3xl font-bold tracking-tight sm:text-5xl">{{ $event?->name ?? 'Leaderboards' }}</h1>
             @if ($event)
                 <p class="mt-3 text-sm text-maroon-100/80">{{ $event->start_date->format('F j, Y') }} – {{ $event->end_date->format('F j, Y') }}</p>
-                <p id="leaderboard-status" class="mt-5 inline-flex rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white" aria-live="polite">{{ $event->leaderboard_frozen ? 'Public results frozen' : (count($initialRows) ? 'Live finalized results' : 'Results pending') }}</p>
+                <p id="leaderboard-status" class="mt-5 inline-flex rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white" aria-live="polite">{{ $event->leaderboard_frozen ? 'Points-only preview' : (count($initialRows) ? 'Live finalized results' : 'Results pending') }}</p>
             @else
                 <p class="mt-3 text-sm text-maroon-100/80">No events are available yet. Please check back later.</p>
             @endif
@@ -30,48 +30,56 @@
         <section class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Leaderboard results">
             <div class="border-b border-slate-200 p-5">
                 <h2 class="text-lg font-semibold text-slate-950">Overall score</h2>
-                <p class="mt-1 text-sm text-slate-500">Contest wins and points from finalized contests across all categories.</p>
+                <p id="overall-description" class="mt-1 text-sm text-slate-500">{{ $event->leaderboard_frozen ? 'Only total points are visible while team identities and wins are hidden.' : 'Contest wins from finalized contests, including wins by category. Total points are hidden until the leaderboard is frozen.' }}</p>
                 <input type="hidden" name="scope" value="overall">
             </div>
 
-            <div id="frozen-message" @class(['border-b border-amber-200 bg-amber-50 px-6 py-4 text-sm font-semibold text-amber-900', 'hidden' => ! $event->leaderboard_frozen]) role="status">The public ranking table is frozen. Check back later.</div>
+            <div id="frozen-message" @class(['border-b border-amber-200 bg-amber-50 px-6 py-4 text-sm font-semibold text-amber-900', 'hidden' => ! $event->leaderboard_frozen]) role="status">Points-only preview: team names, win counts, and contest results are hidden.</div>
             <div class="overflow-x-auto">
                 <table class="w-full min-w-[520px] text-left text-sm">
                     <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                        <tr>
+                        <tr id="leaderboard-headings">
                             <th scope="col" class="px-6 py-4">Rank</th>
-                            <th scope="col" class="px-6 py-4">Participant</th>
-                            <th scope="col" class="px-6 py-4 text-right">Contest wins</th>
-                            <th scope="col" class="px-6 py-4 text-right">Points</th>
+                            @if ($event->leaderboard_frozen)
+                                <th scope="col" class="px-6 py-4 text-right">Total points</th>
+                            @else
+                                <th scope="col" class="px-6 py-4">Participant</th>
+                                <th scope="col" class="px-6 py-4 text-right">Contest wins</th>
+                                @foreach ($initialWinCategories as $category)
+                                    <th scope="col" class="px-6 py-4 text-right">{{ $category['name'] }} wins</th>
+                                @endforeach
+                            @endif
                         </tr>
                     </thead>
                     <tbody id="leaderboard-rows" class="divide-y divide-slate-100">
-                        @if ($event->leaderboard_frozen)
-                            <tr class="select-none blur-sm"><td colspan="4" class="px-6 py-10 text-center text-slate-500">Results hidden until unfrozen</td></tr>
-                        @else
                         @forelse ($initialRows as $row)
                             <tr>
                                 <td class="px-6 py-4 font-bold text-maroon-700">#{{ $row['rank'] }}</td>
-                                <td class="px-6 py-4">
-                                    <div class="flex items-center gap-3">
-                                        <img src="{{ $row['profile_image_url'] ?: asset('images/participant-placeholder.svg') }}" alt="{{ $row['profile_image_url'] ? $row['name'].' profile picture' : 'Participant photo placeholder' }}" onerror="this.onerror=null;this.src='{{ asset('images/participant-placeholder.svg') }}';this.alt='Participant photo placeholder'" class="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-slate-200">
-                                        <span>
-                                            <span class="block font-semibold text-slate-900">{{ $row['name'] }}</span>
-                                        </span>
-                                    </div>
-                                </td>
-                                <td class="px-6 py-4 text-right text-slate-600">{{ $row['contest_wins'] }}</td>
-                                <td class="px-6 py-4 text-right font-semibold">{{ number_format($row['points'], 2) }}</td>
+                                @if ($event->leaderboard_frozen)
+                                    <td class="px-6 py-4 text-right font-semibold">{{ number_format($row['points'], 2) }}</td>
+                                @else
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-3">
+                                            <img src="{{ $row['profile_image_url'] ?: asset('images/participant-placeholder.svg') }}" alt="{{ $row['profile_image_url'] ? $row['name'].' profile picture' : 'Participant photo placeholder' }}" onerror="this.onerror=null;this.src='{{ asset('images/participant-placeholder.svg') }}';this.alt='Participant photo placeholder'" class="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-slate-200">
+                                            <span>
+                                                <span class="block font-semibold text-slate-900">{{ $row['name'] }}</span>
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 text-right text-slate-600">{{ $row['contest_wins'] }}</td>
+                                    @foreach ($initialWinCategories as $category)
+                                        <td class="px-6 py-4 text-right text-slate-600">{{ $row['category_wins'][$category['id']] ?? 0 }}</td>
+                                    @endforeach
+                                @endif
                             </tr>
                         @empty
-                            <tr><td colspan="4" class="px-6 py-10 text-center text-slate-500">Results pending. No contest has been finalized yet.</td></tr>
+                            <tr><td colspan="{{ $event->leaderboard_frozen ? 2 : 3 + count($initialWinCategories) }}" class="px-6 py-10 text-center text-slate-500">Results pending. No contest has been finalized yet.</td></tr>
                         @endforelse
-                        @endif
                     </tbody>
                 </table>
             </div>
         </section>
-        <section class="mt-6" aria-label="Contest results">
+        <section id="contest-results-section" @class(['mt-6', 'hidden' => $event->leaderboard_frozen]) aria-label="Contest results">
             <div class="flex flex-wrap items-end justify-between gap-3">
                 <div><h2 class="text-xl font-semibold text-slate-950">Contests by category</h2><p class="mt-1 text-sm text-slate-500">Browse every contest by category. Rankings appear after scores are finalized. Choose a category and click Apply filter to load it.</p></div>
                 <form id="contest-filter-form" class="flex flex-wrap items-end gap-3">
@@ -125,7 +133,7 @@
                 @endforeach
             </div>
         </section>
-        <p class="mt-4 text-center text-xs text-slate-500">Contest rankings appear after scores are finalized. This page updates automatically.</p>
+        <p id="contest-results-note" @class(['mt-4 text-center text-xs text-slate-500', 'hidden' => $event->leaderboard_frozen])>Contest rankings appear after scores are finalized. This page updates automatically.</p>
         @endif
     </main>
 
@@ -139,22 +147,39 @@
             const applyFilterButton = document.getElementById('apply-contest-filter');
             const contestCards = document.getElementById('contest-cards');
             const rows = document.getElementById('leaderboard-rows');
+            const headings = document.getElementById('leaderboard-headings');
             const status = document.getElementById('leaderboard-status');
+            const overallDescription = document.getElementById('overall-description');
             const frozenMessage = document.getElementById('frozen-message');
+            const contestSection = document.getElementById('contest-results-section');
+            const contestNote = document.getElementById('contest-results-note');
             const participantPlaceholderUrl = @json(asset('images/participant-placeholder.svg'));
             let currentRequest;
             let appliedCategoryId = 'all';
 
-            function showMessage(message, frozen = false) {
+            function showMessage(message) {
                 rows.replaceChildren();
                 const row = document.createElement('tr');
-                if (frozen) row.className = 'select-none blur-sm';
                 const cell = document.createElement('td');
-                cell.colSpan = 4;
+                cell.colSpan = headings.cells.length;
                 cell.className = 'px-6 py-10 text-center text-slate-500';
                 cell.textContent = message;
                 row.append(cell);
                 rows.append(row);
+            }
+
+            function renderHeadings(frozen, winCategories) {
+                headings.replaceChildren();
+
+                for (const label of frozen
+                    ? ['Rank', 'Total points']
+                    : ['Rank', 'Participant', 'Contest wins', ...winCategories.map((category) => `${category.name} wins`)]) {
+                    const heading = document.createElement('th');
+                    heading.scope = 'col';
+                    heading.className = label === 'Rank' || label === 'Participant' ? 'px-6 py-4' : 'px-6 py-4 text-right';
+                    heading.textContent = label;
+                    headings.append(heading);
+                }
             }
 
             function addCell(row, value, className) {
@@ -285,8 +310,6 @@
                 currentRequest = undefined;
                 const request = new AbortController();
                 currentRequest = request;
-                const url = new URL(dataUrl);
-                if (appliedCategoryId !== 'all') url.searchParams.set('category_id', appliedCategoryId);
 
                 if (showFilterLoading) {
                     applyFilterButton.disabled = true;
@@ -295,6 +318,9 @@
                 }
 
                 try {
+                    const url = new URL(dataUrl, window.location.href);
+                    if (appliedCategoryId !== 'all') url.searchParams.set('category_id', appliedCategoryId);
+
                     const response = await fetch(url, {
                         cache: 'no-store',
                         headers: { Accept: 'application/json' },
@@ -302,33 +328,53 @@
                     });
                     if (!response.ok) throw new Error('Unable to load results');
                     const data = await response.json();
+                    if (!Array.isArray(data.rows) || !Array.isArray(data.categories) || !Array.isArray(data.win_categories)) {
+                        throw new Error('Invalid leaderboard response');
+                    }
+
+                    renderHeadings(data.frozen, data.win_categories);
                     frozenMessage.classList.toggle('hidden', !data.frozen);
+                    contestSection.classList.toggle('hidden', data.frozen);
+                    contestNote.classList.toggle('hidden', data.frozen);
+                    overallDescription.textContent = data.frozen
+                        ? 'Only total points are visible while team identities and wins are hidden.'
+                        : 'Contest wins from finalized contests, including wins by category. Total points are hidden until the leaderboard is frozen.';
 
                     if (data.frozen) {
-                        status.textContent = 'Public results frozen';
-                        showMessage('Results hidden until unfrozen', true);
                         contestCards.replaceChildren();
-                    } else if (!data.rows.length) {
+                    } else {
+                        renderCards(data.categories);
+                    }
+
+                    if (!data.rows.length) {
                         status.textContent = 'Results pending';
                         showMessage('Results pending. No contest has been finalized yet.');
-                        renderCards(data.categories);
                     } else {
-                        status.textContent = 'Live finalized results';
-                        renderCards(data.categories);
-                        rows.replaceChildren();
+                        status.textContent = data.frozen ? 'Points-only preview' : 'Live finalized results';
+                        const updatedRows = document.createDocumentFragment();
+
                         for (const result of data.rows) {
                             const row = document.createElement('tr');
                             addCell(row, `#${result.rank}`, 'px-6 py-4 font-bold text-maroon-700');
-                            addParticipantCell(row, result);
-                            addCell(row, result.contest_wins, 'px-6 py-4 text-right text-slate-600');
-                            addCell(row, Number(result.points).toFixed(2), 'px-6 py-4 text-right font-semibold');
-                            rows.append(row);
+
+                            if (data.frozen) {
+                                addCell(row, Number(result.points).toFixed(2), 'px-6 py-4 text-right font-semibold');
+                            } else {
+                                addParticipantCell(row, result);
+                                addCell(row, result.contest_wins, 'px-6 py-4 text-right text-slate-600');
+                                for (const category of data.win_categories) {
+                                    addCell(row, result.category_wins?.[category.id] ?? 0, 'px-6 py-4 text-right text-slate-600');
+                                }
+                            }
+
+                            updatedRows.append(row);
                         }
+
+                        rows.replaceChildren(updatedRows);
                     }
                 } catch (error) {
                     if (error.name === 'AbortError') return;
-                    status.textContent = 'Connection problem';
-                    showMessage('Could not load results. Retrying shortly.');
+                    status.textContent = 'Connection problem — showing last available results';
                 } finally {
                     if (currentRequest === request) {
                         currentRequest = undefined;

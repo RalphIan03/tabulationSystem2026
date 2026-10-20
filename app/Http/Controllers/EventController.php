@@ -187,8 +187,8 @@ final class EventController extends Controller
         ]);
 
         $message = $event->leaderboard_frozen
-            ? 'The public leaderboard has been frozen.'
-            : 'The public leaderboard is live again.';
+            ? 'The public leaderboard now shows total points only.'
+            : 'The public leaderboard now shows teams and wins while hiding total points.';
 
         $route = $request->string('redirect_to')->toString() === 'dashboard'
             ? 'dashboard'
