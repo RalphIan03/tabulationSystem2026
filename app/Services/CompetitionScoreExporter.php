@@ -148,7 +148,8 @@ final class CompetitionScoreExporter
             'criteria' => $criteria,
             'rows' => $rows,
             'criterion_ranks' => $criterionRanks,
-            'signature_teams' => $competition->results
+            'signatories' => $event->reportSignatories(),
+            'signature_teams' => ($event->include_team_signatories ?? true) ? $competition->results
                 ->filter(static fn ($result): bool => $result->has_entry)
                 ->map(static fn ($result) => $participantsById->get($result->participant_id))
                 ->filter()
@@ -157,7 +158,7 @@ final class CompetitionScoreExporter
                 ->sortBy('name')
                 ->pluck('name')
                 ->values()
-                ->all(),
+                ->all() : [],
         ];
     }
 
@@ -226,6 +227,18 @@ final class CompetitionScoreExporter
         } finally {
             unlink($temporaryPath);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $report
+     * @return list<array{title: string, names: list<string>, caption: string}>
+     */
+    private function signatureSections(array $report): array
+    {
+        return array_values(array_filter([
+            ['title' => 'Signatories', 'names' => $report['signatories'], 'caption' => 'Signature'],
+            ['title' => 'Team signatures', 'names' => $report['signature_teams'], 'caption' => 'Authorized representative / signature'],
+        ], static fn (array $section): bool => $section['names'] !== []));
     }
 
     /** @param array<string, mixed> $report */
@@ -320,6 +333,20 @@ final class CompetitionScoreExporter
                     $sheetRows[$nextRow++] = [$rankedRow['rank'], $rankedRow['participant'], $rankedRow['score']];
                 }
 
+                $nextRow++;
+            }
+        }
+
+        $nextRow = max(array_keys($sheetRows)) + 2;
+
+        foreach ($this->signatureSections($report) as $section) {
+            $sheetRows[$nextRow++] = [$section['title']];
+            $nextRow++;
+
+            foreach ($section['names'] as $name) {
+                $sheetRows[$nextRow++] = [$name];
+                $sheetRows[$nextRow++] = ['________________________________'];
+                $sheetRows[$nextRow++] = [$section['caption']];
                 $nextRow++;
             }
         }
@@ -517,36 +544,39 @@ final class CompetitionScoreExporter
             $hasTableOnPage = true;
         }
 
-        if ($report['signature_teams'] !== []) {
-            if ($cursor - 78 < 38) {
+        foreach ($this->signatureSections($report) as $section) {
+            $firstLines = $this->pdfWrapCell($section['names'][0], 500, 9);
+            $firstHeight = count($firstLines) * 11 + 48;
+
+            if ($cursor - 18 - 24 - $firstHeight < 38) {
                 $pages[] = $content;
                 [$content, $cursor] = $this->pdfPageHeader($report);
             } else {
                 $cursor -= 18;
             }
 
-            $content .= $this->pdfDrawText('Team signatures', 30, $cursor - 2, 11, true);
+            $content .= $this->pdfDrawText($section['title'], 30, $cursor - 2, 11, true);
             $cursor -= 24;
 
-            foreach ($report['signature_teams'] as $team) {
-                $teamLines = $this->pdfWrapCell($team, 500, 9);
-                $height = count($teamLines) * 11 + 36;
+            foreach ($section['names'] as $name) {
+                $nameLines = $this->pdfWrapCell($name, 500, 9);
+                $height = count($nameLines) * 11 + 48;
 
                 if ($cursor - $height < 38) {
                     $pages[] = $content;
                     [$content, $cursor] = $this->pdfPageHeader($report);
-                    $content .= $this->pdfDrawText('Team signatures (continued)', 30, $cursor - 2, 11, true);
+                    $content .= $this->pdfDrawText($section['title'].' (continued)', 30, $cursor - 2, 11, true);
                     $cursor -= 24;
                 }
 
-                foreach ($teamLines as $line) {
+                foreach ($nameLines as $line) {
                     $content .= $this->pdfDrawText($line, 30, $cursor - 2, 9, true);
                     $cursor -= 11;
                 }
 
                 $cursor -= 12;
                 $content .= sprintf("0.35 0.35 0.35 RG 0.7 w 30 %.2F m 350 %.2F l S\n", $cursor, $cursor);
-                $content .= $this->pdfDrawText('Authorized representative / signature', 30, $cursor - 12, 8);
+                $content .= $this->pdfDrawText($section['caption'], 30, $cursor - 12, 8);
                 $cursor -= 36;
             }
         }

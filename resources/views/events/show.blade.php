@@ -140,6 +140,40 @@
         </dialog>
     @endif
 
+    @if (auth()->user()->isAdmin())
+        <section class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div class="border-b border-slate-200 px-6 py-5">
+                <h3 class="text-lg font-semibold text-slate-950">Report signatories</h3>
+                <p class="mt-1 text-sm text-slate-500">Set who signs the PDF and Excel contest reports for this event.</p>
+            </div>
+            <form method="POST" action="{{ route('events.signatories.update', $event, false) }}" class="space-y-5 p-5 sm:p-6" data-loading-text="Saving report signatories…">
+                @csrf
+                @method('PATCH')
+                <div>
+                    <label for="report_signatories" class="mb-1.5 block text-sm font-semibold text-slate-700">Signatories <span class="font-normal text-slate-400">(optional, one per line)</span></label>
+                    <textarea id="report_signatories" name="report_signatories" rows="4" maxlength="2000" placeholder="Name — Position or title" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">{{ old('report_signatories', $event->report_signatories) }}</textarea>
+                    <p class="mt-1.5 text-xs text-slate-500">Each non-empty line adds a named signature line at the end of the reports.</p>
+                    @error('report_signatories')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <input type="hidden" name="include_team_signatories" value="0">
+                    <label for="include_team_signatories" class="flex cursor-pointer items-center gap-3">
+                        <input id="include_team_signatories" name="include_team_signatories" type="checkbox" value="1" @checked(old('include_team_signatories', $event->include_team_signatories ?? true)) class="peer sr-only">
+                        <span aria-hidden="true" class="relative inline-flex h-6 w-11 shrink-0 rounded-full bg-slate-300 transition peer-checked:bg-maroon-700 peer-focus-visible:ring-4 peer-focus-visible:ring-maroon-600/20 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-5"></span>
+                        <span>
+                            <span class="block text-sm font-semibold text-slate-800">Include team signatories</span>
+                            <span class="mt-0.5 block text-xs text-slate-500">Add a signature line for each participating main team in PDF and Excel reports. Named signatories above are included even when this is off.</span>
+                        </span>
+                    </label>
+                    @error('include_team_signatories')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                </div>
+                <div class="flex justify-end">
+                    <button type="submit" class="h-11 rounded-xl bg-maroon-700 px-5 text-sm font-semibold text-white transition hover:bg-maroon-800">Save report signatories</button>
+                </div>
+            </form>
+        </section>
+    @endif
+
     <section class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div class="border-b border-slate-200 px-6 py-5">
             <h3 class="text-lg font-semibold text-slate-950">Tie ranking rule</h3>

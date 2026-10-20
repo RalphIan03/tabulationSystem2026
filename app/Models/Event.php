@@ -29,6 +29,8 @@ final class Event extends Model
         'leaderboard_frozen',
         'is_active',
         'archived_at',
+        'report_signatories',
+        'include_team_signatories',
     ];
 
     protected function casts(): array
@@ -41,12 +43,24 @@ final class Event extends Model
             'leaderboard_frozen' => 'boolean',
             'is_active' => 'boolean',
             'archived_at' => 'immutable_datetime',
+            'include_team_signatories' => 'boolean',
         ];
     }
 
     public function isArchived(): bool
     {
         return $this->archived_at !== null;
+    }
+
+    /** @return list<string> */
+    public function reportSignatories(): array
+    {
+        $lines = preg_split('/\R/u', $this->report_signatories ?? '') ?: [];
+
+        return array_values(array_filter(
+            array_map(trim(...), $lines),
+            static fn (string $line): bool => $line !== '',
+        ));
     }
 
     public function canBeArchived(): bool

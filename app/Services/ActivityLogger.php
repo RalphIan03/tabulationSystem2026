@@ -19,6 +19,7 @@ final class ActivityLogger
         'events.store' => 'Created an event',
         'events.destroy' => 'Deleted an event',
         'events.details.update' => 'Updated event name or dates',
+        'events.signatories.update' => 'Updated event report signatories',
         'events.toggle-status' => 'Changed event activation status',
         'events.tie-ranking.update' => 'Updated event tie ranking rule',
         'events.leaderboard-freeze' => 'Changed leaderboard freeze status',

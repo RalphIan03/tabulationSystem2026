@@ -62,6 +62,8 @@ Route::middleware(['auth', 'active', 'credentials-updated', 'visible-event', 'ar
         Route::post('/events', [EventController::class, 'store'])->name('events.store');
         Route::patch('/events/{event}/details', [EventController::class, 'updateDetails'])
             ->name('events.details.update');
+        Route::patch('/events/{event}/signatories', [EventController::class, 'updateSignatories'])
+            ->name('events.signatories.update');
         Route::patch('/events/{event}/status', [EventController::class, 'toggleStatus'])
             ->name('events.toggle-status');
         Route::patch('/events/{event}/archive', [EventController::class, 'archive'])

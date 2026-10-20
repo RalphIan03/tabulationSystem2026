@@ -8,6 +8,7 @@ use App\Enums\ScoringSystem;
 use App\Enums\TieRankingMethod;
 use App\Http\Requests\StoreEventRequest;
 use App\Http\Requests\UpdateEventDetailsRequest;
+use App\Http\Requests\UpdateEventSignatoriesRequest;
 use App\Http\Requests\UpdateEventTieRankingRequest;
 use App\Models\Event;
 use App\Services\ParticipantImageStorage;
@@ -140,6 +141,14 @@ final class EventController extends Controller
 
         return to_route('events.index')
             ->with('status', $event->is_active ? 'Event activated successfully.' : 'Event deactivated successfully.');
+    }
+
+    public function updateSignatories(UpdateEventSignatoriesRequest $request, Event $event): RedirectResponse
+    {
+        $event->update($request->safe()->only(['report_signatories', 'include_team_signatories']));
+
+        return to_route('events.show', $event)
+            ->with('status', 'Report signatories updated successfully.');
     }
 
     public function archive(Event $event): RedirectResponse
