@@ -877,6 +877,15 @@ final class CompetitionScoringTest extends TestCase
             'participant_id' => $teamA2->id,
             'has_entry' => true,
         ]);
+
+        $this->actingAs($admin)
+            ->get(route('events.categories.competitions.scores.edit', $routeParameters))
+            ->assertSeeInOrder([
+                'name="entries['.$teamA->id.']"',
+                'name="entries['.$teamB->id.']"',
+                'name="entries['.$teamA2->id.']"',
+                'name="entries['.$teamB2->id.']"',
+            ], false);
     }
 
     public function test_bulk_subteam_exclusion_clears_saved_wins_without_affecting_main_teams(): void

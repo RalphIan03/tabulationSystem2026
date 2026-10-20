@@ -227,7 +227,7 @@
                         </tr>
                     </thead>
                     <tbody id="competition-score-rows" class="divide-y divide-slate-100">
-                        @foreach ($event->participants as $participant)
+                        @foreach ($scoreParticipants as $participant)
                             @php
                                 $result = $resultsByParticipant->get($participant->id);
                                 $criterionScores = $result?->criterionScores->groupBy('criterion_id') ?? collect();

@@ -12,6 +12,7 @@ use App\Http\Requests\UpdateCompetitionScoresRequest;
 use App\Models\Category;
 use App\Models\Competition;
 use App\Models\Event;
+use App\Models\Participant;
 use App\Services\CompetitionManager;
 use App\Services\CompetitionScoreManager;
 use App\Services\CompetitionScoreWorkbook;
@@ -43,12 +44,20 @@ final class CompetitionScoreController extends Controller
             'results.participant.parentTeam',
             'results.criterionScores',
         ]);
+        $resultsByParticipant = $competition->results->keyBy('participant_id');
+        $scoreParticipants = $event->participants
+            ->sortBy(fn (Participant $participant): int => (bool) old(
+                "entries.{$participant->id}",
+                $resultsByParticipant->get($participant->id)?->has_entry ?? true,
+            ) ? 0 : 1)
+            ->values();
 
         return view('events.competitions.scores', [
             'event' => $event,
             'category' => $category,
             'competition' => $competition,
-            'resultsByParticipant' => $competition->results->keyBy('participant_id'),
+            'resultsByParticipant' => $resultsByParticipant,
+            'scoreParticipants' => $scoreParticipants,
             'standings' => $this->leaderboard->competitionStandings($competition, $event),
             'criterionStandings' => $this->leaderboard->criterionStandings($competition, $event),
         ]);
