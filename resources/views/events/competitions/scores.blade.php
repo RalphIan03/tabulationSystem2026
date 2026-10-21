@@ -140,6 +140,9 @@
             </form>
         @endif
 
+        @if ($competition->usesCriteriaScoring() && $competition->judge_count > 1)
+            @include('events.competitions.partials.multi-judge-scores')
+        @else
         <form method="POST" action="{{ route('events.categories.competitions.scores.update', [$event, $category, $competition], false) }}" class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" data-loading-text="Saving participant scores…">
             @csrf
             @method('PATCH')
@@ -334,6 +337,7 @@
                 </div>
             @endif
         </form>
+        @endif
     @endif
 
     @if ($competition->usesCriteriaScoring() && $criterionStandings->isNotEmpty())

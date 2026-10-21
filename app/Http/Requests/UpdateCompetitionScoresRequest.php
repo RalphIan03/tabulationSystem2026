@@ -90,6 +90,7 @@ final class UpdateCompetitionScoresRequest extends FormRequest
 
         if ($competition->usesRankingScoring()) {
             $rules = [
+                'judge_number' => ['prohibited'],
                 'exclude_subteams' => ['sometimes', 'boolean'],
                 'entries' => ['sometimes', Rule::array($participantIds)],
                 'entries.*' => ['boolean'],
@@ -111,6 +112,7 @@ final class UpdateCompetitionScoresRequest extends FormRequest
 
         if (! $competition->usesCriteriaScoring()) {
             return [
+                'judge_number' => ['prohibited'],
                 'exclude_subteams' => ['sometimes', 'boolean'],
                 'entries' => ['sometimes', Rule::array($participantIds)],
                 'entries.*' => ['boolean'],
@@ -126,12 +128,15 @@ final class UpdateCompetitionScoresRequest extends FormRequest
             ->all();
 
         $rules = [
-            'exclude_subteams' => ['sometimes', 'boolean'],
-            'entries' => ['sometimes', Rule::array($participantIds)],
+            'judge_number' => ['sometimes', 'integer', 'min:1', 'max:'.$competition->judge_count, Rule::prohibitedIf($competition->judge_count === 1)],
+            'exclude_subteams' => ['sometimes', 'boolean', Rule::prohibitedIf($this->has('judge_number'))],
+            'entries' => ['sometimes', Rule::array($participantIds), Rule::prohibitedIf($this->has('judge_number'))],
             'entries.*' => ['boolean'],
             'scores' => ['required', Rule::array($participantIds)],
         ];
-        $judgeNumbers = array_map('strval', range(1, $competition->judge_count));
+        $judgeNumbers = $this->has('judge_number')
+            ? [(string) $this->integer('judge_number')]
+            : array_map('strval', range(1, $competition->judge_count));
 
         foreach ($participantIds as $participantId) {
             $rules["scores.{$participantId}"] = ['nullable', Rule::array($criterionIds)];

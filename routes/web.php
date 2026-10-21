@@ -142,6 +142,10 @@ Route::middleware(['auth', 'active', 'credentials-updated', 'visible-event', 'ar
             [CompetitionScoreController::class, 'update'],
         )->name('events.categories.competitions.scores.update');
         Route::patch(
+            '/events/{event}/categories/{category}/competitions/{competition}/entries',
+            [CompetitionScoreController::class, 'updateEntries'],
+        )->name('events.categories.competitions.entries.update');
+        Route::patch(
             '/events/{event}/categories/{category}/competitions/{competition}/deductions',
             [CompetitionScoreController::class, 'updateDeductions'],
         )->name('events.categories.competitions.deductions.update');

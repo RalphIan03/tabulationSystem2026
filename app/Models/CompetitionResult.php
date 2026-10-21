@@ -37,6 +37,28 @@ final class CompetitionResult extends Model
         return $this->hasMany(CriterionScore::class);
     }
 
+    public function judgeScoreTotal(Competition $competition, int $judgeNumber): ?float
+    {
+        if ($judgeNumber < 1 || $judgeNumber > $competition->judge_count || $competition->criteria->isEmpty()) {
+            return null;
+        }
+
+        $scores = $this->criterionScores->where('judge_number', $judgeNumber)->keyBy('criterion_id');
+        $total = 0.0;
+
+        foreach ($competition->criteria as $criterion) {
+            $score = $scores->get($criterion->getKey());
+
+            if ($score === null) {
+                return null;
+            }
+
+            $total += (float) $score->score;
+        }
+
+        return round($total, 2);
+    }
+
     /** @return array{averages: array<int, float|null>, gross: float|null, rankable: bool} */
     public function criteriaScoreSummary(Competition $competition): array
     {

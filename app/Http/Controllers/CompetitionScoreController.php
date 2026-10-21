@@ -8,6 +8,7 @@ use App\Http\Requests\BatchExcludeLinkedContestantsRequest;
 use App\Http\Requests\ImportCompetitionScoresRequest;
 use App\Http\Requests\ResetCompetitionScoresRequest;
 use App\Http\Requests\UpdateCompetitionDeductionsRequest;
+use App\Http\Requests\UpdateCompetitionEntriesRequest;
 use App\Http\Requests\UpdateCompetitionFinalizationRequest;
 use App\Http\Requests\UpdateCompetitionScoresRequest;
 use App\Models\Category;
@@ -113,7 +114,21 @@ final class CompetitionScoreController extends Controller
             $event,
             $category,
             $competition,
-        ])->with('status', 'Participant scores saved successfully.');
+        ])->with('status', $request->has('judge_number')
+            ? 'Judge '.$request->integer('judge_number').' scores saved successfully.'
+            : 'Participant scores saved successfully.');
+    }
+
+    public function updateEntries(
+        UpdateCompetitionEntriesRequest $request,
+        Event $event,
+        Category $category,
+        Competition $competition,
+    ): RedirectResponse {
+        $this->scoreManager->saveEntries($competition, $event->participants, $request->validated('entries'));
+
+        return to_route('events.categories.competitions.scores.edit', [$event, $category, $competition])
+            ->with('status', 'Participant entries saved successfully.');
     }
 
     public function excludeLinkedContestants(

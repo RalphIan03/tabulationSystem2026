@@ -29,6 +29,12 @@ final class CompetitionScoreManager
             ]);
 
             if ($competition->usesCriteriaScoring()) {
+                if (isset($data['judge_number'])) {
+                    $this->saveJudgeScores($competition, $participants, $data['scores'] ?? [], (int) $data['judge_number']);
+
+                    return;
+                }
+
                 $this->saveCriteriaScores(
                     $competition,
                     $participants,
@@ -59,6 +65,69 @@ final class CompetitionScoreManager
         });
 
         $this->invalidateLeaderboard($competition);
+    }
+
+    /**
+     * @param  Collection<int, Participant>  $participants
+     * @param  array<int|string, mixed>  $entries
+     */
+    public function saveEntries(Competition $competition, Collection $participants, array $entries): void
+    {
+        DB::transaction(static function () use ($competition, $participants, $entries): void {
+            foreach ($participants as $participant) {
+                if (! array_key_exists($participant->getKey(), $entries)) {
+                    continue;
+                }
+
+                $result = $competition->results()->firstOrCreate(
+                    ['participant_id' => $participant->getKey()],
+                    ['has_entry' => (bool) $entries[$participant->getKey()]],
+                );
+                $result->update(['has_entry' => (bool) $entries[$participant->getKey()]]);
+            }
+        });
+
+        $this->invalidateLeaderboard($competition);
+    }
+
+    /**
+     * @param  Collection<int, Participant>  $participants
+     * @param  array<int|string, mixed>  $scores
+     */
+    private function saveJudgeScores(Competition $competition, Collection $participants, array $scores, int $judgeNumber): void
+    {
+        $results = $competition->results->keyBy('participant_id');
+
+        foreach ($participants as $participant) {
+            $participantScores = $scores[$participant->getKey()] ?? null;
+            $result = $results->get($participant->getKey());
+
+            if (! is_array($participantScores) || $result?->has_entry === false) {
+                continue;
+            }
+
+            $hasScore = $competition->criteria->contains(static fn ($criterion): bool => ($participantScores[$criterion->getKey()][$judgeNumber] ?? null) !== null
+                && $participantScores[$criterion->getKey()][$judgeNumber] !== '');
+
+            if ($result === null && ! $hasScore) {
+                continue;
+            }
+
+            $result ??= $competition->results()->firstOrCreate(['participant_id' => $participant->getKey()]);
+
+            foreach ($competition->criteria as $criterion) {
+                $value = $participantScores[$criterion->getKey()][$judgeNumber] ?? null;
+                $key = ['criterion_id' => $criterion->getKey(), 'judge_number' => $judgeNumber];
+
+                if ($value === null || $value === '') {
+                    $result->criterionScores()->where($key)->delete();
+
+                    continue;
+                }
+
+                $result->criterionScores()->updateOrCreate($key, ['score' => $value]);
+            }
+        }
     }
 
     /** @param Collection<int, Competition> $competitions */
