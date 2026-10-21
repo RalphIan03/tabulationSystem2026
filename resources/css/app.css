@@ -20,6 +20,39 @@
     --color-maroon-950: #2f0000;
 }
 
+.score-table-scroll {
+    max-height: 70vh;
+    max-height: 70dvh;
+    overflow: auto;
+    isolation: isolate;
+    scrollbar-gutter: stable;
+    scroll-padding-block-start: 6rem;
+}
+
+.score-table-scroll:focus-visible {
+    outline: 2px solid var(--color-maroon-600);
+    outline-offset: -2px;
+}
+
+.score-table-scroll thead {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: var(--color-slate-50);
+    box-shadow: 0 1px 0 var(--color-slate-200);
+}
+
+@media print {
+    .score-table-scroll {
+        max-height: none;
+        overflow: visible;
+    }
+
+    .score-table-scroll thead {
+        position: static;
+    }
+}
+
 .user-dialog {
     position: fixed !important;
     inset: 0 !important;

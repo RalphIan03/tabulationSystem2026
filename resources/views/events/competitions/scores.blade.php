@@ -191,7 +191,7 @@
                 </div>
             @endif
 
-            <div class="overflow-x-auto">
+            <div class="score-table-scroll" role="region" aria-label="Contest scoring table" tabindex="0">
                 <table class="w-full min-w-[1020px] text-left text-sm">
                     <thead class="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
                         <tr>
@@ -345,14 +345,16 @@
                     <article class="overflow-hidden rounded-xl border border-slate-200">
                         <h4 class="border-b border-slate-200 bg-slate-50 px-4 py-3 font-semibold text-slate-900">{{ $breakdown['criterion']->name }}</h4>
                         @if ($breakdown['standings']->isNotEmpty())
-                            <table class="w-full text-left text-sm">
-                                <thead class="text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-4 py-2">Rank</th><th class="px-4 py-2">Participant</th><th class="px-4 py-2 text-right">Average</th></tr></thead>
-                                <tbody class="divide-y divide-slate-100">
-                                    @foreach ($breakdown['standings'] as $row)
-                                        <tr><td class="px-4 py-3 font-bold text-maroon-700">#{{ $row['rank'] }}</td><td class="px-4 py-3">{{ $row['participant']->name }}</td><td class="px-4 py-3 text-right font-semibold">{{ number_format($row['score'], 2) }}</td></tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
+                            <div class="score-table-scroll" role="region" aria-label="{{ $breakdown['criterion']->name }} rankings" tabindex="0">
+                                <table class="w-full text-left text-sm">
+                                    <thead class="text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-4 py-2">Rank</th><th class="px-4 py-2">Participant</th><th class="px-4 py-2 text-right">Average</th></tr></thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        @foreach ($breakdown['standings'] as $row)
+                                            <tr><td class="px-4 py-3 font-bold text-maroon-700">#{{ $row['rank'] }}</td><td class="px-4 py-3">{{ $row['participant']->name }}</td><td class="px-4 py-3 text-right font-semibold">{{ number_format($row['score'], 2) }}</td></tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
                         @else
                             <p class="px-4 py-6 text-sm text-slate-500">No complete scores yet.</p>
                         @endif
