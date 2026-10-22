@@ -470,6 +470,9 @@
                                 <div class="mt-auto grid grid-cols-2 gap-2 pt-5">
                                     <a href="{{ route('events.categories.competitions.show', [$event, $category, $competition]) }}" class="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Configure</a>
                                     <a href="{{ route('events.categories.competitions.scores.edit', [$event, $category, $competition]) }}" class="inline-flex h-10 items-center justify-center rounded-lg bg-maroon-700 text-sm font-semibold text-white transition hover:bg-maroon-800">Enter scores</a>
+                                    @if ($competition->scoring_method === \App\Enums\CompetitionScoringMethod::Wins && $competition->bracket_url)
+                                        <a href="{{ $competition->bracket_url }}" target="_blank" rel="noopener noreferrer" class="col-span-2 inline-flex h-10 items-center justify-center rounded-lg border border-maroon-200 text-sm font-semibold text-maroon-700 transition hover:bg-maroon-50">Open bracket</a>
+                                    @endif
                                     @if (auth()->user()->isAdmin())
                                         <form method="POST" action="{{ route('events.categories.competitions.destroy', [$event, $category, $competition], false) }}" class="col-span-2" data-loading-text="Deleting contest…" onsubmit="return confirm('Delete this contest? Its configuration and scores will be permanently removed.')">
                                             @csrf

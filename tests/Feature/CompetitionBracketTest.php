@@ -95,20 +95,26 @@ final class CompetitionBracketTest extends TestCase
         $this->assertNull($competition->refresh()->bracket_url);
         $this->get(route('events.categories.competitions.show', [$event, $category, $competition]))->assertDontSee('Open bracket');
         $this->get(route('events.categories.competitions.scores.edit', [$event, $category, $competition]))->assertDontSee('Open bracket');
+        $this->get(route('events.show', $event))->assertDontSee('Open bracket');
     }
 
-    public function test_saved_bracket_is_an_escaped_external_link_on_configuration_and_score_pages(): void
+    #[DataProvider('roles')]
+    public function test_saved_bracket_is_an_escaped_external_link_on_configuration_score_and_contest_cards(AccountRole $role): void
     {
-        $user = User::factory()->create(['role' => AccountRole::Auditor]);
+        $user = User::factory()->create(['role' => $role]);
         [$event, $category, $competition] = $this->contest();
         $competition->update(['bracket_url' => 'https://example.com/bracket?round=2&view=full']);
         $parameters = [$event, $category, $competition];
 
         $this->actingAs($user)->get(route('events.categories.competitions.show', $parameters))
+            ->assertSee('id="bracket_url" name="bracket_url" type="url"', false)
             ->assertSee('href="https://example.com/bracket?round=2&amp;view=full" target="_blank" rel="noopener noreferrer"', false)
             ->assertSee('action="'.route('events.categories.competitions.bracket.update', $parameters, false).'"', false);
         $this->get(route('events.categories.competitions.scores.edit', $parameters))
             ->assertSee('href="https://example.com/bracket?round=2&amp;view=full" target="_blank" rel="noopener noreferrer"', false);
+        $this->get(route('events.show', $event))
+            ->assertSee('href="https://example.com/bracket?round=2&amp;view=full" target="_blank" rel="noopener noreferrer"', false)
+            ->assertSee('Open bracket');
     }
 
     #[DataProvider('invalidBracketUrls')]
@@ -165,6 +171,7 @@ final class CompetitionBracketTest extends TestCase
         $this->get(route('events.categories.competitions.show', [$event, $category, $competition]))
             ->assertDontSee('Save bracket link')->assertDontSee('Open bracket');
         $this->get(route('events.categories.competitions.scores.edit', [$event, $category, $competition]))->assertDontSee('Open bracket');
+        $this->get(route('events.show', $event))->assertDontSee('Open bracket');
     }
 
     #[DataProvider('nonWinMethods')]
