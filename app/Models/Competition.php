@@ -21,6 +21,7 @@ final class Competition extends Model
         'name',
         'scoring_method',
         'judge_count',
+        'bracket_url',
         'non_podium_points',
         'scores_finalized_at',
     ];

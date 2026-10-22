@@ -541,6 +541,15 @@
                                     @endif
                                 </div>
 
+                                <div data-contest-bracket-field hidden>
+                                    <label for="competition_bracket_url_{{ $category->id }}" class="mb-1.5 block text-sm font-semibold text-slate-700">Bracketing URL (optional)</label>
+                                    <input id="competition_bracket_url_{{ $category->id }}" name="bracket_url" type="url" maxlength="2048" value="{{ old('_form') === 'add_contest' && (string) old('category_id') === (string) $category->id ? old('bracket_url') : '' }}" placeholder="https://example.com/your-bracket" class="h-11 w-full rounded-xl border border-slate-300 px-4 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                                    <p class="mt-1 text-xs text-slate-500">Link to an external bracket for this win-based contest, preferably using HTTPS.</p>
+                                    @if (old('_form') === 'add_contest' && (string) old('category_id') === (string) $category->id)
+                                        @error('bracket_url')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                    @endif
+                                </div>
+
                                 <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
                                     <button type="button" data-contest-dialog-close class="h-11 rounded-xl border border-slate-300 px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Cancel</button>
                                     <button type="submit" class="h-11 rounded-xl bg-maroon-700 px-5 text-sm font-semibold text-white transition hover:bg-maroon-800">Create contest</button>
@@ -570,20 +579,25 @@
                 const form = dialog.querySelector('[data-contest-form]');
                 const judgeField = dialog.querySelector('[data-contest-judge-field]');
                 const judgeInput = judgeField?.querySelector('input');
-                const syncJudgeField = () => {
-                    const criteriaBased = form?.querySelector('input[name="scoring_method"]:checked')?.value === 'criteria';
+                const bracketField = dialog.querySelector('[data-contest-bracket-field]');
+                const bracketInput = bracketField?.querySelector('input');
+                const syncScoringFields = () => {
+                    const scoringMethod = form?.querySelector('input[name="scoring_method"]:checked')?.value;
+                    const criteriaBased = scoringMethod === 'criteria';
                     judgeField.hidden = ! criteriaBased;
                     judgeInput.required = criteriaBased;
+                    bracketField.hidden = scoringMethod !== 'wins';
+                    bracketInput.disabled = scoringMethod !== 'wins';
                 };
 
-                form?.querySelectorAll('input[name="scoring_method"]').forEach((input) => input.addEventListener('change', syncJudgeField));
+                form?.querySelectorAll('input[name="scoring_method"]').forEach((input) => input.addEventListener('change', syncScoringFields));
                 dialog.querySelectorAll('[data-contest-dialog-close]').forEach((button) => {
                     button.addEventListener('click', () => dialog.close());
                 });
                 dialog.addEventListener('click', (event) => {
                     if (event.target === dialog) dialog.close();
                 });
-                syncJudgeField();
+                syncScoringFields();
 
                 if (@json(old('_form') === 'add_contest' && $errors->any()) && form?.querySelector('input[name="category_id"]')?.value === @json((string) old('category_id'))) {
                     dialog.showModal();

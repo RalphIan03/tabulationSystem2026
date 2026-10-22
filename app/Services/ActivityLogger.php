@@ -32,6 +32,7 @@ final class ActivityLogger
         'events.categories.competitions.destroy' => 'Deleted a contest',
         'events.competition-scores.reset' => 'Reset contest scores',
         'events.categories.competitions.scoring-method.update' => 'Changed a contest scoring method',
+        'events.categories.competitions.bracket.update' => 'Updated a contest bracket link',
         'events.categories.competitions.judge-count.update' => 'Changed the number of contest judges',
         'events.categories.competitions.scores.update' => 'Updated participant contest scores',
         'events.categories.competitions.entries.update' => 'Updated participant contest entries',

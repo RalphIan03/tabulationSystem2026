@@ -86,6 +86,35 @@
         @endif
     </section>
 
+    @if ($competition->scoring_method === \App\Enums\CompetitionScoringMethod::Wins)
+        <section class="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-5">
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-950">External bracket</h3>
+                    <p class="mt-1 text-sm text-slate-500">Optionally link to this contest’s bracket on another website. Scores are still entered in this system.</p>
+                </div>
+                @if ($competition->bracket_url)
+                    <a href="{{ $competition->bracket_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex h-11 items-center justify-center rounded-xl border border-maroon-200 px-4 text-sm font-semibold text-maroon-700 transition hover:bg-maroon-50">Open bracket</a>
+                @endif
+            </div>
+            @if ($canEditConfiguration)
+                <form method="POST" action="{{ route('events.categories.competitions.bracket.update', [$event, $category, $competition], false) }}" class="space-y-4 p-6" data-loading-text="Saving bracket link…">
+                    @csrf
+                    @method('PATCH')
+                    <div>
+                        <label for="bracket_url" class="mb-1.5 block text-sm font-semibold text-slate-700">Bracketing URL (optional)</label>
+                        <input id="bracket_url" name="bracket_url" type="url" maxlength="2048" value="{{ old('bracket_url', $competition->bracket_url) }}" placeholder="https://example.com/your-bracket" aria-describedby="bracket_url_help" class="h-11 w-full rounded-xl border border-slate-300 px-4 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
+                        <p id="bracket_url_help" class="mt-1 text-xs text-slate-500">Use a full HTTP or HTTPS URL, preferably HTTPS. Leave blank and save to remove the link.</p>
+                        @error('bracket_url')<p role="alert" class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                    </div>
+                    <button type="submit" class="h-11 rounded-xl bg-maroon-700 px-5 text-sm font-semibold text-white transition hover:bg-maroon-800">Save bracket link</button>
+                </form>
+            @else
+                <p class="p-6 text-sm text-slate-600">{{ $competition->bracket_url ? 'The bracket link is read-only for this finalized contest.' : 'No bracket link configured.' }}</p>
+            @endif
+        </section>
+    @endif
+
     <div @class(['mt-6 grid gap-6', 'xl:grid-cols-2' => $competition->usesCriteriaScoring()])>
         @if ($competition->usesCriteriaScoring())
         <section class="rounded-2xl border border-slate-200 bg-white shadow-sm">

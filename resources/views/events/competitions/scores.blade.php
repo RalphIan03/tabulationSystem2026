@@ -40,6 +40,9 @@
             </div>
             <div class="flex flex-wrap gap-2">
                 <a href="{{ route('events.categories.competitions.show', [$event, $category, $competition]) }}" class="inline-flex h-10 items-center justify-center rounded-xl border border-white/25 px-4 text-sm font-semibold text-white transition hover:bg-white/10">Configure contest</a>
+                @if ($competition->scoring_method === \App\Enums\CompetitionScoringMethod::Wins && $competition->bracket_url)
+                    <a href="{{ $competition->bracket_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex h-10 items-center justify-center rounded-xl border border-white/25 px-4 text-sm font-semibold text-white transition hover:bg-white/10">Open bracket</a>
+                @endif
                 <a href="{{ route('events.leaderboard', $event) }}" class="inline-flex h-10 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-maroon-800 transition hover:bg-maroon-50">View leaderboard</a>
                 <a href="{{ route('events.categories.competitions.scores.export', [$event, $category, $competition, 'format' => 'xlsx'], false) }}" download data-export-download data-loading-text="Exporting Excel…" class="inline-flex h-10 items-center justify-center rounded-xl border border-white/25 px-4 text-sm font-semibold text-white transition hover:bg-white/10">Export Excel</a>
                 <a href="{{ route('events.categories.competitions.scores.export', [$event, $category, $competition, 'format' => 'pdf'], false) }}" download data-export-download data-loading-text="Exporting PDF…" class="inline-flex h-10 items-center justify-center rounded-xl border border-white/25 px-4 text-sm font-semibold text-white transition hover:bg-white/10">Export PDF</a>

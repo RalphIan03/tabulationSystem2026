@@ -118,6 +118,10 @@ Route::middleware(['auth', 'active', 'credentials-updated', 'visible-event', 'ar
             [CompetitionController::class, 'updateScoringMethod'],
         )->name('events.categories.competitions.scoring-method.update');
         Route::patch(
+            '/events/{event}/categories/{category}/competitions/{competition}/bracket',
+            [CompetitionController::class, 'updateBracket'],
+        )->name('events.categories.competitions.bracket.update');
+        Route::patch(
             '/events/{event}/categories/{category}/competitions/{competition}/judge-count',
             [CompetitionController::class, 'updateJudgeCount'],
         )->name('events.categories.competitions.judge-count.update');

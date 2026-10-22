@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\CompetitionScoringMethod;
 use App\Http\Requests\StoreCompetitionRequest;
+use App\Http\Requests\UpdateCompetitionBracketRequest;
 use App\Http\Requests\UpdateCompetitionJudgeCountRequest;
 use App\Http\Requests\UpdateCompetitionScoringMethodRequest;
 use App\Models\Category;
@@ -35,6 +36,9 @@ final class CompetitionController extends Controller
             'judge_count' => $scoringMethod === CompetitionScoringMethod::Criteria->value
                 ? $request->validated('judge_count', 1)
                 : 1,
+            'bracket_url' => $scoringMethod === CompetitionScoringMethod::Wins->value
+                ? $request->validated('bracket_url')
+                : null,
         ]);
 
         return to_route('events.show', $event)
@@ -59,6 +63,18 @@ final class CompetitionController extends Controller
             'canEditConfiguration' => $competition->canBeConfiguredBy($request->user()),
             'judgeCountLocked' => $competition->results()->whereHas('criterionScores')->exists(),
         ]);
+    }
+
+    public function updateBracket(
+        UpdateCompetitionBracketRequest $request,
+        Event $event,
+        Category $category,
+        Competition $competition,
+    ): RedirectResponse {
+        $competition->update(['bracket_url' => $request->validated('bracket_url')]);
+
+        return to_route('events.categories.competitions.show', [$event, $category, $competition])
+            ->with('status', 'Contest bracket link updated successfully.');
     }
 
     public function updateJudgeCount(
