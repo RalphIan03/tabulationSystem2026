@@ -102,7 +102,12 @@
                             <div class="grid gap-5 p-5 xl:grid-cols-2">
                                 @foreach ($category['contests'] as $contest)
                                     <article data-contest-card="{{ $contest['id'] }}" class="overflow-hidden rounded-xl border border-slate-200">
-                                        <h4 class="border-b border-slate-200 px-5 py-4 font-semibold">{{ $contest['name'] }}</h4>
+                                        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+                                            <h4 class="font-semibold">{{ $contest['name'] }}</h4>
+                                            @if ($contest['bracket_url'])
+                                                <a href="{{ $contest['bracket_url'] }}" target="_blank" rel="noopener noreferrer" data-bracket-link class="inline-flex h-9 items-center justify-center rounded-lg border border-maroon-200 px-3 text-xs font-semibold text-maroon-700 transition hover:bg-maroon-50">Open bracket</a>
+                                            @endif
+                                        </div>
                                         @if (! $contest['finalized'])
                                             <p class="px-5 py-8 text-center text-sm text-slate-500">No finalized score</p>
                                         @else
@@ -236,10 +241,15 @@
                         const card = document.createElement('article');
                         card.dataset.contestCard = String(contest.id);
                         card.className = 'overflow-hidden rounded-xl border border-slate-200';
+                        const cardHeader = document.createElement('div');
+                        cardHeader.className = 'flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4';
                         const title = document.createElement('h4');
-                        title.className = 'border-b border-slate-200 px-5 py-4 font-semibold';
+                        title.className = 'font-semibold';
                         title.textContent = contest.name;
-                        card.append(title);
+                        cardHeader.append(title);
+                        const bracketLink = createBracketLink(contest.bracket_url);
+                        if (bracketLink) cardHeader.append(bracketLink);
+                        card.append(cardHeader);
 
                         if (!contest.finalized) {
                             const pending = document.createElement('p');
@@ -302,6 +312,26 @@
                     contestCards.append(empty);
                 }
 
+            }
+
+            function createBracketLink(url) {
+                if (typeof url !== 'string') return null;
+
+                try {
+                    if (!['http:', 'https:'].includes(new URL(url).protocol)) return null;
+                } catch {
+                    return null;
+                }
+
+                const link = document.createElement('a');
+                link.href = url;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                link.dataset.bracketLink = '';
+                link.className = 'inline-flex h-9 items-center justify-center rounded-lg border border-maroon-200 px-3 text-xs font-semibold text-maroon-700 transition hover:bg-maroon-50';
+                link.textContent = 'Open bracket';
+
+                return link;
             }
 
             async function refresh(force = false, showFilterLoading = false) {

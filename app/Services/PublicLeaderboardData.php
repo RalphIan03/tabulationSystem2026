@@ -66,7 +66,7 @@ final class PublicLeaderboardData
             ->whereIn('category_id', $event->categories->modelKeys())
             ->whereNull('scores_finalized_at')
             ->orderBy('name')
-            ->get(['id', 'category_id', 'name', 'scoring_method'])
+            ->get(['id', 'category_id', 'name', 'scoring_method', 'bracket_url'])
             ->groupBy('category_id');
         $categories = $event->categories
             ->map(function ($category) use ($pendingContests, $event): array {
@@ -77,6 +77,7 @@ final class PublicLeaderboardData
                         'id' => $competition->getKey(),
                         'name' => $competition->name,
                         'method' => $competition->scoring_method->value,
+                        'bracket_url' => $this->bracketUrl($competition),
                         'finalized' => true,
                         'rows' => $this->calculator->competitionStandings($competition, $event)
                             ->filter(static fn (array $row): bool => $winningRanks === []
@@ -93,6 +94,7 @@ final class PublicLeaderboardData
                         'id' => $competition->getKey(),
                         'name' => $competition->name,
                         'method' => $competition->scoring_method->value,
+                        'bracket_url' => $this->bracketUrl($competition),
                         'finalized' => false,
                         'rows' => [],
                     ]);
@@ -168,6 +170,17 @@ final class PublicLeaderboardData
                 'category_wins' => $row['category_wins'],
                 'points' => $row['leaderboard_points'],
             ])->all();
+    }
+
+    private function bracketUrl(Competition $competition): ?string
+    {
+        $url = $competition->bracket_url;
+
+        return $competition->supportsExternalBracket()
+            && is_string($url)
+            && Str::isUrl($url, ['http', 'https'])
+                ? $url
+                : null;
     }
 
     /** @return array{name: string, profile_image_url: ?string} */

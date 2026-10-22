@@ -9,14 +9,132 @@ use App\Enums\CompetitionScoringMethod;
 use App\Models\Event;
 use App\Models\User;
 use App\Services\PublicLeaderboardData;
+use DOMDocument;
+use DOMXPath;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 final class PublicLeaderboardTest extends TestCase
 {
     use RefreshDatabase;
+
+    #[DataProvider('publicBracketContests')]
+    public function test_public_contest_cards_include_saved_bracket_links_before_and_after_finalization(CompetitionScoringMethod $method, bool $finalized): void
+    {
+        $event = Event::factory()->create();
+        $category = $event->categories()->create(['name' => 'Sports']);
+        $url = 'https://example.com/bracket?round=2&view=full';
+        $competition = $category->competitions()->create([
+            'name' => 'Basketball',
+            'scoring_method' => $method,
+            'scores_finalized_at' => $finalized ? now() : null,
+            'bracket_url' => $url,
+        ]);
+        Cache::put("leaderboard:event:{$event->id}:snapshot:v5", ['rows' => [], 'categories' => [], 'win_categories' => []], 120);
+
+        $response = $this->get(route('leaderboards.show', $event));
+
+        $links = $this->xpath($response->getContent())->query('//article[@data-contest-card="'.$competition->id.'"]//a[@data-bracket-link]');
+        $this->assertSame(1, $links->length);
+        $link = $links->item(0);
+        $this->assertSame($url, $link->getAttribute('href'));
+        $this->assertSame('_blank', $link->getAttribute('target'));
+        $this->assertSame('noopener noreferrer', $link->getAttribute('rel'));
+        $this->assertSame('Open bracket', trim($link->textContent));
+        $response->assertSee('href="https://example.com/bracket?round=2&amp;view=full"', false);
+        $this->getJson(route('leaderboards.data', $event))
+            ->assertJsonPath('categories.0.contests.0.bracket_url', $url)
+            ->assertJsonPath('categories.0.contests.0.finalized', $finalized);
+    }
+
+    #[DataProvider('hiddenBracketLinks')]
+    public function test_public_cards_hide_missing_unsupported_or_unsafe_bracket_links(CompetitionScoringMethod $method, ?string $url): void
+    {
+        $event = Event::factory()->create();
+        $category = $event->categories()->create(['name' => 'Sports']);
+        $category->competitions()->create(['name' => 'Contest', 'scoring_method' => $method, 'bracket_url' => $url]);
+
+        $response = $this->get(route('leaderboards.show', $event));
+
+        $this->assertSame(0, $this->xpath($response->getContent())->query('//article//a[@data-bracket-link]')->length);
+        $this->getJson(route('leaderboards.data', $event))->assertJsonPath('categories.0.contests.0.bracket_url', null);
+    }
+
+    public function test_bracket_changes_refresh_public_filter_data_and_clearing_removes_the_button(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        $event = Event::factory()->create();
+        $sports = $event->categories()->create(['name' => 'Sports']);
+        $arts = $event->categories()->create(['name' => 'Arts']);
+        $competition = $sports->competitions()->create([
+            'name' => 'Basketball',
+            'scoring_method' => CompetitionScoringMethod::Ranking,
+            'bracket_url' => 'https://example.com/original',
+        ]);
+        $arts->competitions()->create(['name' => 'Other contest', 'scoring_method' => CompetitionScoringMethod::Wins, 'bracket_url' => 'https://example.com/other']);
+        $dataRoute = route('leaderboards.data', [$event, 'category_id' => $sports->id]);
+        $updateRoute = route('events.categories.competitions.bracket.update', [$event, $sports, $competition]);
+
+        $this->getJson($dataRoute)->assertJsonCount(1, 'categories')->assertJsonPath('categories.0.contests.0.bracket_url', 'https://example.com/original');
+        $this->actingAs($admin)->patch($updateRoute, ['bracket_url' => 'https://example.com/updated'])->assertRedirect()->assertSessionHasNoErrors();
+        $this->getJson($dataRoute)->assertJsonCount(1, 'categories')->assertJsonPath('categories.0.contests.0.bracket_url', 'https://example.com/updated');
+        $this->patch($updateRoute, ['bracket_url' => ''])->assertRedirect()->assertSessionHasNoErrors();
+        $this->getJson($dataRoute)->assertJsonPath('categories.0.contests.0.bracket_url', null);
+
+        $response = $this->get(route('leaderboards.show', $event));
+        $this->assertSame(0, $this->xpath($response->getContent())->query('//article[@data-contest-card="'.$competition->id.'"]//a[@data-bracket-link]')->length);
+    }
+
+    public function test_frozen_leaderboards_do_not_expose_external_bracket_links(): void
+    {
+        $event = Event::factory()->create(['leaderboard_frozen' => true]);
+        $category = $event->categories()->create(['name' => 'Sports']);
+        $category->competitions()->create([
+            'name' => 'Basketball',
+            'scoring_method' => CompetitionScoringMethod::Wins,
+            'bracket_url' => 'https://example.com/hidden-bracket',
+            'scores_finalized_at' => now(),
+        ]);
+
+        $response = $this->get(route('leaderboards.show', $event));
+
+        $this->assertSame(0, $this->xpath($response->getContent())->query('//a[@data-bracket-link]')->length);
+        $response->assertDontSee('hidden-bracket');
+        $this->getJson(route('leaderboards.data', $event))->assertJsonCount(0, 'categories')->assertDontSee('hidden-bracket');
+    }
+
+    public static function publicBracketContests(): array
+    {
+        return [
+            'pending wins' => [CompetitionScoringMethod::Wins, false],
+            'finalized wins' => [CompetitionScoringMethod::Wins, true],
+            'pending ranking' => [CompetitionScoringMethod::Ranking, false],
+            'finalized ranking' => [CompetitionScoringMethod::Ranking, true],
+        ];
+    }
+
+    public static function hiddenBracketLinks(): array
+    {
+        return [
+            'no link' => [CompetitionScoringMethod::Wins, null],
+            'empty link' => [CompetitionScoringMethod::Ranking, ''],
+            'criteria contest' => [CompetitionScoringMethod::Criteria, 'https://example.com/bracket'],
+            'javascript link' => [CompetitionScoringMethod::Wins, 'javascript:alert(1)'],
+            'data link' => [CompetitionScoringMethod::Ranking, 'data:text/html,<script>alert(1)</script>'],
+        ];
+    }
+
+    private function xpath(string $html): DOMXPath
+    {
+        $document = new DOMDocument;
+        @$document->loadHTML($html);
+
+        return new DOMXPath($document);
+    }
 
     public function test_repeated_public_snapshot_avoids_reloading_event_scoring_data(): void
     {
