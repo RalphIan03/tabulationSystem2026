@@ -13,9 +13,11 @@ use App\Models\Event;
 use App\Models\Participant;
 use App\Models\User;
 use App\Services\LeaderboardCalculator;
+use App\Services\PublicLeaderboardData;
 use DOMDocument;
 use DOMXPath;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -74,6 +76,81 @@ final class MultiJudgeScoringTest extends TestCase
         $this->assertSame(0, $xpath->query('//form[starts-with(@id,"judge-")]//input[starts-with(@name,"deductions[")]')->length);
         $this->assertSame(1, $xpath->query('//form[@id="judge-1-scores"]//input[@name="judge_number" and @value="1"]')->length);
         $this->assertSame(1, $xpath->query('//form[@id="judge-2-scores"]//input[@name="judge_number" and @value="2"]')->length);
+    }
+
+    public function test_equal_judge_totals_have_equal_averages_rankings_and_points_before_deductions(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        [$event, $category, $competition, $teamA, $technique, $presentation] = $this->contest();
+        $competition->update(['judge_count' => 3]);
+        $creativity = $competition->criteria()->create(['name' => 'Creativity', 'max_score' => 100]);
+        $teamB = $event->participants()->create(['name' => 'TEAM B']);
+        $competition->rankScores()->createMany([
+            ['rank' => 1, 'points' => 50],
+            ['rank' => 2, 'points' => 30],
+        ]);
+        $parameters = [$event, $category, $competition];
+        $judgeScores = [
+            1 => [[$technique->id => 33, $presentation->id => 33, $creativity->id => 23], [$technique->id => 34, $presentation->id => 34, $creativity->id => 22]],
+            2 => [[$technique->id => 33, $presentation->id => 33, $creativity->id => 23], [$technique->id => 34, $presentation->id => 34, $creativity->id => 22]],
+            3 => [[$technique->id => 34, $presentation->id => 34, $creativity->id => 22], [$technique->id => 33, $presentation->id => 33, $creativity->id => 22]],
+        ];
+
+        foreach ($judgeScores as $judge => [$scoresA, $scoresB]) {
+            $this->actingAs($admin)->patch(route('events.categories.competitions.scores.update', $parameters), [
+                'judge_number' => $judge,
+                'scores' => [
+                    $teamA->id => array_map(static fn (int $score): array => [$judge => $score], $scoresA),
+                    $teamB->id => array_map(static fn (int $score): array => [$judge => $score], $scoresB),
+                ],
+            ])->assertRedirect()->assertSessionHasNoErrors();
+        }
+
+        $standings = app(LeaderboardCalculator::class)->competitionStandings($competition->fresh(), $event);
+        $this->assertSame(['TEAM A', 'TEAM B'], $standings->pluck('participant.name')->all());
+        $this->assertSame([89.33, 89.33], $standings->pluck('gross_score')->all());
+        $this->assertSame([1, 1], $standings->pluck('rank')->all());
+        $this->assertSame([50.0, 50.0], $standings->pluck('leaderboard_points')->all());
+        $page = $this->get(route('events.categories.competitions.scores.edit', $parameters));
+        $averages = $this->xpath($page->getContent())->query('//table[@id="overall-score-table"]/tbody/tr/td[7]');
+        $this->assertSame(['89.33', '89.33'], array_map(static fn ($cell): string => trim($cell->textContent), iterator_to_array($averages)));
+
+        $this->patch(route('events.categories.competitions.scores.finalization.update', $parameters))
+            ->assertRedirect()->assertSessionHasNoErrors();
+        Cache::put("leaderboard:event:{$event->id}:snapshot:v4", ['stale_calculation' => true], 120);
+        $snapshot = app(PublicLeaderboardData::class)->snapshot($event->fresh());
+        $this->assertArrayNotHasKey('stale_calculation', $snapshot);
+        $this->assertSame([1, 1], array_column($snapshot['categories'][0]['contests'][0]['rows'], 'rank'));
+
+        $this->patch(route('events.categories.competitions.deductions.update', $parameters), [
+            'deductions' => [$teamB->id => 0.5],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $deducted = app(LeaderboardCalculator::class)->competitionStandings($competition->fresh(), $event);
+        $this->assertSame([89.33, 89.33], $deducted->pluck('gross_score')->all());
+        $this->assertSame([89.33, 88.83], $deducted->pluck('raw_score')->all());
+        $this->assertSame([1, 2], $deducted->pluck('rank')->all());
+        $this->assertSame([50.0, 30.0], $deducted->pluck('leaderboard_points')->all());
+        $this->assertDatabaseCount('criterion_scores', 18);
+    }
+
+    #[DataProvider('decimalJudgeScores')]
+    public function test_decimal_judge_scores_are_averaged_before_rounding_the_overall_total(array $techniqueScores, array $presentationScores, float $expected): void
+    {
+        [$event, $category, $competition, $participant, $technique, $presentation] = $this->contest();
+        $competition->update(['judge_count' => count($techniqueScores)]);
+        $result = $competition->results()->create(['participant_id' => $participant->id]);
+
+        foreach ($techniqueScores as $index => $score) {
+            $result->criterionScores()->createMany([
+                ['criterion_id' => $technique->id, 'judge_number' => $index + 1, 'score' => $score],
+                ['criterion_id' => $presentation->id, 'judge_number' => $index + 1, 'score' => $presentationScores[$index]],
+            ]);
+        }
+
+        $standings = app(LeaderboardCalculator::class)->competitionStandings($competition->fresh(), $event);
+
+        $this->assertSame($expected, $standings->sole()['gross_score']);
     }
 
     public function test_editing_or_clearing_one_judge_preserves_other_judges_and_participants(): void
@@ -261,6 +338,15 @@ final class MultiJudgeScoringTest extends TestCase
         ])->assertForbidden();
 
         $this->assertDatabaseCount('competition_results', 0);
+    }
+
+    /** @return array<string, array{list<string>, list<string>, float}> */
+    public static function decimalJudgeScores(): array
+    {
+        return [
+            'repeating decimals' => [['10.01', '10.02', '10.02'], ['20.01', '20.02', '20.02'], 30.03],
+            'half-cent rounds up' => [['10.01', '10.02'], ['20.00', '20.00'], 30.02],
+        ];
     }
 
     /** @return array<string, array{AccountRole}> */

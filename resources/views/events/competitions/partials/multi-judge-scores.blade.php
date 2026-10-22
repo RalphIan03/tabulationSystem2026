@@ -10,7 +10,7 @@
         <div>
             <h3 class="text-lg font-semibold text-slate-950">Overall scores</h3>
             <p class="mt-1 text-sm text-slate-500">Judge columns show saved totals. The average, final rank, and points are calculated after all {{ $competition->judge_count }} judges complete every criterion.</p>
-            <p class="mt-1 text-xs text-slate-500">Total score = average score minus deduction. Save entry changes here before submitting judge scores.</p>
+            <p class="mt-1 text-xs text-slate-500">Average score = combined judge totals ÷ {{ $competition->judge_count }}, rounded once to two decimals. Total score = average score minus deduction. Save entry changes here before submitting judge scores.</p>
             <p class="mt-1 text-xs text-slate-400">Tie ranking: {{ $event->tie_ranking_method->label() }}.</p>
         </div>
         @if ($canEditScores)

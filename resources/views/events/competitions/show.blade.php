@@ -130,7 +130,7 @@
 
             <div class="border-b border-slate-200 bg-slate-50/70 p-5">
                 <p class="text-sm font-semibold text-slate-900">Number of judges</p>
-                <p class="mt-1 text-xs leading-5 text-slate-500">Each judge scores every criterion. The final criterion score is the average of all judges, and these averages are added for the contest total.</p>
+                <p class="mt-1 text-xs leading-5 text-slate-500">Each judge scores every criterion. The overall average is the combined total of all judges divided by the number of judges, rounded once to two decimals.</p>
                 @if ($canEditConfiguration && ! $judgeCountLocked)
                     <form method="POST" action="{{ route('events.categories.competitions.judge-count.update', [$event, $category, $competition], false) }}" data-loading-text="Saving judge count…" class="mt-3 flex flex-wrap items-end gap-3">
                         @csrf

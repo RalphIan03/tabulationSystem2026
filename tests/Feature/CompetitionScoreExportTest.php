@@ -299,6 +299,62 @@ final class CompetitionScoreExportTest extends TestCase
         $this->assertTrue(strpos($content, '(Participant 01)') < strpos($content, '(Participant 30)'));
     }
 
+    public function test_equal_judge_totals_export_equal_averages_and_deductions_in_pdf_and_excel(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        $event = Event::factory()->create(['name' => 'Arts Festival']);
+        $category = $event->categories()->create(['name' => 'Arts']);
+        $competition = $category->competitions()->create(['name' => 'Painting', 'judge_count' => 3]);
+        $criteria = collect(['Technique', 'Presentation', 'Creativity'])->map(
+            fn (string $name) => $competition->criteria()->create(['name' => $name, 'max_score' => 100]),
+        );
+        $competition->rankScores()->create(['rank' => 1, 'points' => 50]);
+        $distributions = [
+            'TEAM A' => [[33, 33, 23], [33, 33, 23], [34, 34, 22]],
+            'TEAM B' => [[34, 34, 22], [34, 34, 22], [33, 33, 22]],
+        ];
+
+        foreach ($distributions as $name => $judges) {
+            $participant = $event->participants()->create(['name' => $name]);
+            $result = $competition->results()->create(['participant_id' => $participant->id, 'deduction' => 0.5]);
+
+            foreach ($judges as $judge => $scores) {
+                foreach ($criteria as $index => $criterion) {
+                    $result->criterionScores()->create(['criterion_id' => $criterion->id, 'judge_number' => $judge + 1, 'score' => $scores[$index]]);
+                }
+            }
+        }
+
+        $parameters = [$event, $category, $competition];
+        $excel = $this->actingAs($admin)->get(route('events.categories.competitions.scores.export', [...$parameters, 'format' => 'xlsx']))->assertOk();
+        $pdf = $this->get(route('events.categories.competitions.scores.export', [...$parameters, 'format' => 'pdf']))->assertOk();
+        $temporaryPath = tempnam(sys_get_temp_dir(), 'test-rounded-averages-');
+        $this->assertNotFalse($temporaryPath);
+
+        try {
+            file_put_contents($temporaryPath, $excel->getContent());
+            $archive = new ZipArchive;
+            $this->assertTrue($archive->open($temporaryPath));
+            $sheet = $archive->getFromName('xl/worksheets/sheet1.xml');
+            $archive->close();
+            $this->assertIsString($sheet);
+        } finally {
+            unlink($temporaryPath);
+        }
+
+        foreach ([11, 12] as $row) {
+            $this->assertStringContainsString('<c r="A'.$row.'"><v>1</v></c>', $sheet);
+            $this->assertStringContainsString('<c r="G'.$row.'"><v>89.33</v></c>', $sheet);
+            $this->assertStringContainsString('<c r="I'.$row.'"><v>88.83</v></c>', $sheet);
+            $this->assertStringContainsString('<c r="J'.$row.'"><v>50</v></c>', $sheet);
+        }
+
+        $this->assertStringContainsString('Td (89.33) Tj ET', $pdf->getContent());
+        $this->assertStringContainsString('Td (88.83) Tj ET', $pdf->getContent());
+        $this->assertStringNotContainsString('Td (89.34) Tj ET', $pdf->getContent());
+        $this->assertStringNotContainsString('Td (88.84) Tj ET', $pdf->getContent());
+    }
+
     public function test_multi_judge_exports_show_averaged_scores_instead_of_summed_judge_scores(): void
     {
         $admin = User::factory()->create(['role' => AccountRole::Admin]);

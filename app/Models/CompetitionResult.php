@@ -67,12 +67,21 @@ final class CompetitionResult extends Model
                 && $score->judge_number <= $competition->judge_count)
             ->groupBy('criterion_id');
         $averages = [];
+        $totalHundredths = 0;
 
         foreach ($competition->criteria as $criterion) {
             $judgeScores = $scoresByCriterion->get($criterion->getKey(), collect())->unique('judge_number');
-            $averages[$criterion->getKey()] = $judgeScores->count() === $competition->judge_count
-                ? round($judgeScores->sum(static fn (CriterionScore $score): float => (float) $score->score) / $competition->judge_count, 2)
-                : null;
+
+            if ($judgeScores->count() !== $competition->judge_count) {
+                $averages[$criterion->getKey()] = null;
+
+                continue;
+            }
+
+            // Keep stored two-decimal scores exact instead of adding rounded criterion averages.
+            $criterionHundredths = $judgeScores->sum(static fn (CriterionScore $score): int => (int) round((float) $score->score * 100));
+            $totalHundredths += $criterionHundredths;
+            $averages[$criterion->getKey()] = round($criterionHundredths / ($competition->judge_count * 100), 2);
         }
 
         $hasAverage = count(array_filter($averages, static fn (?float $average): bool => $average !== null)) > 0;
@@ -82,7 +91,7 @@ final class CompetitionResult extends Model
 
         return [
             'averages' => $averages,
-            'gross' => $rankable ? round(array_sum($averages), 2) : null,
+            'gross' => $rankable ? round($totalHundredths / ($competition->judge_count * 100), 2) : null,
             'rankable' => $rankable,
         ];
     }
