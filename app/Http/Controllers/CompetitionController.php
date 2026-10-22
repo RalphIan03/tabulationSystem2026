@@ -36,7 +36,7 @@ final class CompetitionController extends Controller
             'judge_count' => $scoringMethod === CompetitionScoringMethod::Criteria->value
                 ? $request->validated('judge_count', 1)
                 : 1,
-            'bracket_url' => $scoringMethod === CompetitionScoringMethod::Wins->value
+            'bracket_url' => in_array($scoringMethod, [CompetitionScoringMethod::Wins->value, CompetitionScoringMethod::Ranking->value], true)
                 ? $request->validated('bracket_url')
                 : null,
         ]);

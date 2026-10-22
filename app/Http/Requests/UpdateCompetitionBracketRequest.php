@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
-use App\Enums\CompetitionScoringMethod;
 use App\Models\Category;
 use App\Models\Competition;
 use App\Models\Event;
@@ -26,7 +25,7 @@ final class UpdateCompetitionBracketRequest extends FormRequest
             && $competition instanceof Competition
             && (string) $category->event_id === (string) $event->getKey()
             && (string) $competition->category_id === (string) $category->getKey()
-            && $competition->scoring_method === CompetitionScoringMethod::Wins
+            && $competition->supportsExternalBracket()
             && $competition->canBeConfiguredBy($this->user());
     }
 

@@ -41,7 +41,7 @@ final class StoreCompetitionRequest extends FormRequest
             ],
             'scoring_method' => ['sometimes', 'required', Rule::enum(CompetitionScoringMethod::class)],
             'judge_count' => ['exclude_unless:scoring_method,criteria', 'required', 'integer', 'between:1,10'],
-            'bracket_url' => ['exclude_unless:scoring_method,wins', 'nullable', 'string', 'url:http,https', 'max:2048'],
+            'bracket_url' => ['exclude_unless:scoring_method,wins,ranking', 'nullable', 'string', 'url:http,https', 'max:2048'],
         ];
     }
 

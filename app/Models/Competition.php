@@ -46,6 +46,11 @@ final class Competition extends Model
         return $this->scoring_method === CompetitionScoringMethod::Ranking;
     }
 
+    public function supportsExternalBracket(): bool
+    {
+        return in_array($this->scoring_method, [CompetitionScoringMethod::Wins, CompetitionScoringMethod::Ranking], true);
+    }
+
     public function scoresAreFinalized(): bool
     {
         return $this->scores_finalized_at !== null;

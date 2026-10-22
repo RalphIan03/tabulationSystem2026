@@ -470,7 +470,7 @@
                                 <div class="mt-auto grid grid-cols-2 gap-2 pt-5">
                                     <a href="{{ route('events.categories.competitions.show', [$event, $category, $competition]) }}" class="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Configure</a>
                                     <a href="{{ route('events.categories.competitions.scores.edit', [$event, $category, $competition]) }}" class="inline-flex h-10 items-center justify-center rounded-lg bg-maroon-700 text-sm font-semibold text-white transition hover:bg-maroon-800">Enter scores</a>
-                                    @if ($competition->scoring_method === \App\Enums\CompetitionScoringMethod::Wins && $competition->bracket_url)
+                                    @if ($competition->supportsExternalBracket() && $competition->bracket_url)
                                         <a href="{{ $competition->bracket_url }}" target="_blank" rel="noopener noreferrer" class="col-span-2 inline-flex h-10 items-center justify-center rounded-lg border border-maroon-200 text-sm font-semibold text-maroon-700 transition hover:bg-maroon-50">Open bracket</a>
                                     @endif
                                     @if (auth()->user()->isAdmin())
@@ -547,7 +547,7 @@
                                 <div data-contest-bracket-field hidden>
                                     <label for="competition_bracket_url_{{ $category->id }}" class="mb-1.5 block text-sm font-semibold text-slate-700">Bracketing URL (optional)</label>
                                     <input id="competition_bracket_url_{{ $category->id }}" name="bracket_url" type="url" maxlength="2048" value="{{ old('_form') === 'add_contest' && (string) old('category_id') === (string) $category->id ? old('bracket_url') : '' }}" placeholder="https://example.com/your-bracket" class="h-11 w-full rounded-xl border border-slate-300 px-4 text-sm outline-none transition focus:border-maroon-600 focus:ring-4 focus:ring-maroon-600/10">
-                                    <p class="mt-1 text-xs text-slate-500">Link to an external bracket for this win-based contest, preferably using HTTPS.</p>
+                                    <p class="mt-1 text-xs text-slate-500">Link to an external bracket for this win-based or ranking-based contest, preferably using HTTPS.</p>
                                     @if (old('_form') === 'add_contest' && (string) old('category_id') === (string) $category->id)
                                         @error('bracket_url')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                                     @endif
@@ -589,8 +589,9 @@
                     const criteriaBased = scoringMethod === 'criteria';
                     judgeField.hidden = ! criteriaBased;
                     judgeInput.required = criteriaBased;
-                    bracketField.hidden = scoringMethod !== 'wins';
-                    bracketInput.disabled = scoringMethod !== 'wins';
+                    const supportsBracket = ['wins', 'ranking'].includes(scoringMethod);
+                    bracketField.hidden = ! supportsBracket;
+                    bracketInput.disabled = ! supportsBracket;
                 };
 
                 form?.querySelectorAll('input[name="scoring_method"]').forEach((input) => input.addEventListener('change', syncScoringFields));

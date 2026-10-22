@@ -86,7 +86,7 @@
         @endif
     </section>
 
-    @if ($competition->scoring_method === \App\Enums\CompetitionScoringMethod::Wins)
+    @if ($competition->supportsExternalBracket())
         <section class="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-5">
                 <div>

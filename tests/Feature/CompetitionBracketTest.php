@@ -19,8 +19,8 @@ final class CompetitionBracketTest extends TestCase
 {
     use RefreshDatabase;
 
-    #[DataProvider('roles')]
-    public function test_users_can_create_win_based_contests_with_a_bracket_link(AccountRole $role): void
+    #[DataProvider('rolesAndBracketMethods')]
+    public function test_users_can_create_supported_contests_with_a_bracket_link(AccountRole $role, CompetitionScoringMethod $method): void
     {
         $user = User::factory()->create(['role' => $role]);
         $event = Event::factory()->create();
@@ -28,21 +28,21 @@ final class CompetitionBracketTest extends TestCase
 
         $this->actingAs($user)->post(route('events.categories.competitions.store', [$event, $category]), [
             'competition_name' => 'Basketball',
-            'scoring_method' => 'wins',
+            'scoring_method' => $method->value,
             'bracket_url' => 'https://example.com/brackets/basketball?round=2&view=full',
         ])->assertRedirect(route('events.show', $event))->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('competitions', [
             'category_id' => $category->id,
             'name' => 'Basketball',
-            'scoring_method' => 'wins',
+            'scoring_method' => $method->value,
             'bracket_url' => 'https://example.com/brackets/basketball?round=2&view=full',
             'judge_count' => 1,
         ]);
     }
 
     #[DataProvider('optionalBracketPayloads')]
-    public function test_bracket_link_is_optional_when_creating_a_win_based_contest(array $payload): void
+    public function test_bracket_link_is_optional_when_creating_a_supported_contest(array $payload, CompetitionScoringMethod $method): void
     {
         $user = User::factory()->create();
         $event = Event::factory()->create();
@@ -50,20 +50,20 @@ final class CompetitionBracketTest extends TestCase
 
         $this->actingAs($user)->post(route('events.categories.competitions.store', [$event, $category]), [
             'competition_name' => 'Basketball',
-            'scoring_method' => 'wins',
+            'scoring_method' => $method->value,
             ...$payload,
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('competitions', ['category_id' => $category->id, 'name' => 'Basketball', 'bracket_url' => null]);
     }
 
-    #[DataProvider('roles')]
-    public function test_users_can_update_a_bracket_link_without_changing_scores_or_other_configuration(AccountRole $role): void
+    #[DataProvider('rolesAndBracketMethods')]
+    public function test_users_can_update_a_bracket_link_without_changing_scores_or_other_configuration(AccountRole $role, CompetitionScoringMethod $method): void
     {
         $user = User::factory()->create(['role' => $role]);
-        [$event, $category, $competition] = $this->contest();
+        [$event, $category, $competition] = $this->contest($method);
         $participant = $event->participants()->create(['name' => 'TEAM A']);
-        $result = $competition->results()->create(['participant_id' => $participant->id, 'wins' => 3, 'deduction' => 5]);
+        $result = $competition->results()->create(['participant_id' => $participant->id, 'wins' => 3, 'placement' => 1, 'deduction' => 5]);
 
         $this->actingAs($user)->patch(route('events.categories.competitions.bracket.update', [$event, $category, $competition]), [
             'bracket_url' => 'http://example.com/updated-bracket',
@@ -74,18 +74,20 @@ final class CompetitionBracketTest extends TestCase
 
         $this->assertSame('http://example.com/updated-bracket', $competition->refresh()->bracket_url);
         $this->assertSame('Basketball', $competition->name);
-        $this->assertSame(CompetitionScoringMethod::Wins, $competition->scoring_method);
+        $this->assertSame($method, $competition->scoring_method);
         $this->assertSame(3, $result->refresh()->wins);
+        $this->assertSame(1, $result->placement);
         $this->assertSame('5.00', $result->deduction);
         $log = ActivityLog::query()->where('route_name', 'events.categories.competitions.bracket.update')->latest('id')->firstOrFail();
         $this->assertSame('Updated a contest bracket link', $log->description);
         $this->assertSame($competition->id, $log->context['resources']['competition']['id']);
     }
 
-    public function test_clearing_the_bracket_link_removes_it_from_configuration_and_scoring(): void
+    #[DataProvider('bracketMethods')]
+    public function test_clearing_the_bracket_link_removes_it_from_configuration_and_scoring(CompetitionScoringMethod $method): void
     {
         $user = User::factory()->create();
-        [$event, $category, $competition] = $this->contest();
+        [$event, $category, $competition] = $this->contest($method);
         $competition->update(['bracket_url' => 'https://example.com/old-bracket']);
 
         $this->actingAs($user)->patch(route('events.categories.competitions.bracket.update', [$event, $category, $competition]), [
@@ -98,11 +100,11 @@ final class CompetitionBracketTest extends TestCase
         $this->get(route('events.show', $event))->assertDontSee('Open bracket');
     }
 
-    #[DataProvider('roles')]
-    public function test_saved_bracket_is_an_escaped_external_link_on_configuration_score_and_contest_cards(AccountRole $role): void
+    #[DataProvider('rolesAndBracketMethods')]
+    public function test_saved_bracket_is_an_escaped_external_link_on_configuration_score_and_contest_cards(AccountRole $role, CompetitionScoringMethod $method): void
     {
         $user = User::factory()->create(['role' => $role]);
-        [$event, $category, $competition] = $this->contest();
+        [$event, $category, $competition] = $this->contest($method);
         $competition->update(['bracket_url' => 'https://example.com/bracket?round=2&view=full']);
         $parameters = [$event, $category, $competition];
 
@@ -156,7 +158,7 @@ final class CompetitionBracketTest extends TestCase
         $this->assertSame('https://example.com/original', $competition->refresh()->bracket_url);
     }
 
-    #[DataProvider('nonWinMethods')]
+    #[DataProvider('nonBracketMethods')]
     public function test_bracket_settings_are_unavailable_for_other_scoring_methods(CompetitionScoringMethod $method): void
     {
         $user = User::factory()->create();
@@ -174,8 +176,8 @@ final class CompetitionBracketTest extends TestCase
         $this->get(route('events.show', $event))->assertDontSee('Open bracket');
     }
 
-    #[DataProvider('nonWinMethods')]
-    public function test_non_win_contest_creation_ignores_bracket_urls(CompetitionScoringMethod $method): void
+    #[DataProvider('nonBracketMethods')]
+    public function test_unsupported_contest_creation_ignores_bracket_urls(CompetitionScoringMethod $method): void
     {
         $user = User::factory()->create();
         $event = Event::factory()->create();
@@ -188,11 +190,12 @@ final class CompetitionBracketTest extends TestCase
         $this->assertDatabaseHas('competitions', ['category_id' => $category->id, 'name' => 'Contest', 'bracket_url' => null]);
     }
 
-    public function test_finalization_prevents_auditor_bracket_changes_but_allows_admin_corrections(): void
+    #[DataProvider('bracketMethods')]
+    public function test_finalization_prevents_auditor_bracket_changes_but_allows_admin_corrections(CompetitionScoringMethod $method): void
     {
         $auditor = User::factory()->create(['role' => AccountRole::Auditor]);
         $admin = User::factory()->create(['role' => AccountRole::Admin]);
-        [$event, $category, $competition] = $this->contest();
+        [$event, $category, $competition] = $this->contest($method);
         $competition->update(['scores_finalized_at' => now()]);
         $parameters = [$event, $category, $competition];
 
@@ -250,19 +253,40 @@ final class CompetitionBracketTest extends TestCase
         $this->assertNull($competition->refresh()->bracket_url);
     }
 
-    public static function roles(): array
+    public static function rolesAndBracketMethods(): array
     {
-        return ['admin' => [AccountRole::Admin], 'auditor' => [AccountRole::Auditor]];
+        $cases = [];
+
+        foreach ([AccountRole::Admin, AccountRole::Auditor] as $role) {
+            foreach ([CompetitionScoringMethod::Wins, CompetitionScoringMethod::Ranking] as $method) {
+                $cases[$role->value.' '.$method->value] = [$role, $method];
+            }
+        }
+
+        return $cases;
     }
 
     public static function optionalBracketPayloads(): array
     {
-        return ['missing' => [[]], 'empty' => [['bracket_url' => '']], 'null' => [['bracket_url' => null]]];
+        $cases = [];
+
+        foreach ([CompetitionScoringMethod::Wins, CompetitionScoringMethod::Ranking] as $method) {
+            foreach (['missing' => [], 'empty' => ['bracket_url' => ''], 'null' => ['bracket_url' => null]] as $name => $payload) {
+                $cases[$method->value.' '.$name] = [$payload, $method];
+            }
+        }
+
+        return $cases;
     }
 
-    public static function nonWinMethods(): array
+    public static function bracketMethods(): array
     {
-        return ['criteria' => [CompetitionScoringMethod::Criteria], 'ranking' => [CompetitionScoringMethod::Ranking]];
+        return ['wins' => [CompetitionScoringMethod::Wins], 'ranking' => [CompetitionScoringMethod::Ranking]];
+    }
+
+    public static function nonBracketMethods(): array
+    {
+        return ['criteria' => [CompetitionScoringMethod::Criteria]];
     }
 
     public static function invalidBracketUrls(): array
@@ -282,11 +306,11 @@ final class CompetitionBracketTest extends TestCase
     }
 
     /** @return array{Event, Category, Competition} */
-    private function contest(): array
+    private function contest(CompetitionScoringMethod $method = CompetitionScoringMethod::Wins): array
     {
         $event = Event::factory()->create();
         $category = $event->categories()->create(['name' => 'Sports']);
-        $competition = $category->competitions()->create(['name' => 'Basketball', 'scoring_method' => CompetitionScoringMethod::Wins]);
+        $competition = $category->competitions()->create(['name' => 'Basketball', 'scoring_method' => $method]);
 
         return [$event, $category, $competition];
     }
