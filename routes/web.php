@@ -27,12 +27,12 @@ Route::redirect('/', '/login');
 Route::get('/participant-images/{image}', [ParticipantImageController::class, 'show'])
     ->whereUuid('image')->name('participant-images.show');
 
-// Route::get('/leaderboards', [PublicLeaderboardController::class, 'index'])
-//     ->name('leaderboards.index');
-// Route::get('/leaderboards/{event}', [PublicLeaderboardController::class, 'show'])
-//     ->name('leaderboards.show');
-// Route::get('/leaderboards/{event}/data', [PublicLeaderboardController::class, 'data'])
-//     ->name('leaderboards.data');
+Route::get('/leaderboards', [PublicLeaderboardController::class, 'index'])
+    ->name('leaderboards.index');
+Route::get('/leaderboards/{event}', [PublicLeaderboardController::class, 'show'])
+    ->name('leaderboards.show');
+Route::get('/leaderboards/{event}/data', [PublicLeaderboardController::class, 'data'])
+    ->name('leaderboards.data');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
