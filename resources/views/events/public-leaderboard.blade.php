@@ -94,7 +94,7 @@
                     <button id="apply-contest-filter" type="submit" class="inline-flex h-11 items-center justify-center rounded-xl bg-maroon-700 px-5 text-sm font-semibold text-white transition hover:bg-maroon-800 focus:outline-none focus-visible:ring-4 focus-visible:ring-maroon-600/20 disabled:cursor-wait disabled:opacity-60">Apply filter</button>
                 </form>
             </div>
-            <div id="contest-cards" class="mt-4 space-y-6">
+            <!-- <div id="contest-cards" class="mt-4 space-y-6">
                 @foreach ($initialCategories as $category)
                     @if (count($category['contests']))
                         <section data-category-card="{{ $category['id'] }}" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -136,7 +136,7 @@
                         </section>
                     @endif
                 @endforeach
-            </div>
+            </div> -->
         </section>
         <p id="contest-results-note" @class(['mt-4 text-center text-xs text-slate-500', 'hidden' => $event->leaderboard_frozen])>Contest rankings appear after scores are finalized. This page updates automatically.</p>
         @endif
