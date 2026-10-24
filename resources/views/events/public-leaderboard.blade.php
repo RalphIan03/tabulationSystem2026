@@ -27,7 +27,7 @@
         </header>
 
         @if ($event)
-        <section class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Leaderboard results">
+        <!-- <section class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Leaderboard results">
             <div class="border-b border-slate-200 p-5">
                 <h2 class="text-lg font-semibold text-slate-950">Overall score</h2>
                 <p id="overall-description" class="mt-1 text-sm text-slate-500">{{ $event->leaderboard_frozen ? 'Only total points are visible while team identities and wins are hidden.' : 'Contest wins from finalized contests, including wins by category. Total points are hidden until the leaderboard is frozen.' }}</p>
@@ -78,7 +78,7 @@
                     </tbody>
                 </table>
             </div>
-        </section>
+        </section> -->
         <section id="contest-results-section" @class(['mt-6', 'hidden' => $event->leaderboard_frozen]) aria-label="Contest results">
             <div class="flex flex-wrap items-end justify-between gap-3">
                 <div><h2 class="text-xl font-semibold text-slate-950">Contests by category</h2><p class="mt-1 text-sm text-slate-500">Browse every contest by category. Rankings appear after scores are finalized. Choose a category and click Apply filter to load it.</p></div>
