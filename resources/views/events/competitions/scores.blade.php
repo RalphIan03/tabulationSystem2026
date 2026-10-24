@@ -158,7 +158,7 @@
                         <p class="mt-1 text-xs text-slate-400">Tie ranking: {{ $event->tie_ranking_method->label() }}.</p>
                     @endunless
                     @if ($competition->usesRankingScoring())
-                        <p class="mt-1 text-xs text-slate-500">Enter each participating team's unique finishing rank, starting at 1. Mark non-entrants as No entry. All ranks must be consecutive before finalization.</p>
+                        <p class="mt-1 text-xs text-slate-500">Enter each participating team’s unique finishing rank, starting at 1. Entered ranks determine base points; final rankings use points after deductions. Mark non-entrants as No entry. Entered ranks must be consecutive before finalization.</p>
                     @elseif (! $competition->usesCriteriaScoring())
                         <p class="mt-1 text-xs text-slate-500">Wins determine rank. Deductions reduce awarded rank points, not wins.</p>
                     @endif

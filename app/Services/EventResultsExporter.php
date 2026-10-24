@@ -33,7 +33,7 @@ final class EventResultsExporter
         $this->row($stream, ['Inclusive dates', $event->start_date->format('Y-m-d').' to '.$event->end_date->format('Y-m-d')]);
         $this->row($stream, []);
         $this->row($stream, ['Overall results']);
-        $this->row($stream, ['Rank', 'Participant', 'Contest wins', 'Recorded wins', 'Leaderboard points', 'Contests entered']);
+        $this->row($stream, ['Rank', 'Participant', 'Contest wins', 'Recorded wins', 'Leaderboard points', 'Contests entered', 'Earned points', 'Overall deduction', 'Finalized points', 'Pending points']);
 
         foreach ($this->leaderboard->overallStandings($event) as $index => $result) {
             $this->row($stream, [
@@ -43,6 +43,10 @@ final class EventResultsExporter
                 $result['recorded_wins'],
                 $result['leaderboard_points'],
                 $result['contests_entered'],
+                $result['gross_points'],
+                $result['overall_deduction'],
+                $result['finalized_points'],
+                $result['pending_points'],
             ]);
         }
 

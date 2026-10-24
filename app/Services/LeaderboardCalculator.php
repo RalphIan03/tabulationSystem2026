@@ -87,7 +87,7 @@ final class LeaderboardCalculator
         $tieRankingMethod = $event->tie_ranking_method;
         $rankScores = $competition->rankScores->keyBy('rank');
 
-        return $rows->map(function (array $row, int $index) use (
+        $rankedRows = $rows->map(function (array $row, int $index) use (
             $competition,
             $rankScores,
             $tieRankingMethod,
@@ -109,11 +109,33 @@ final class LeaderboardCalculator
                 : (float) $rankScore->points;
             $row['leaderboard_points'] = $competition->usesCriteriaScoring()
                 ? $row['rank_points']
-                : max(0.0, $row['rank_points'] - $row['deduction']);
+                : round(max(0.0, $row['rank_points'] - $row['deduction']), 2);
             $previousScore = $row['raw_score'];
 
             return $row;
         });
+
+        if (! $competition->usesRankingScoring()) {
+            return $rankedRows;
+        }
+
+        $previousPoints = null;
+        $rank = 0;
+
+        return $rankedRows
+            ->sort(static fn (array $left, array $right): int => ($right['leaderboard_points'] <=> $left['leaderboard_points'])
+                ?: strcasecmp($left['participant']->name, $right['participant']->name))
+            ->values()
+            ->map(static function (array $row, int $index) use ($tieRankingMethod, &$previousPoints, &$rank): array {
+                if ($previousPoints === null || abs($row['leaderboard_points'] - $previousPoints) > 0.00001) {
+                    $rank = $tieRankingMethod === TieRankingMethod::SkipPositions ? $index + 1 : $rank + 1;
+                }
+
+                $row['rank'] = $rank;
+                $previousPoints = $row['leaderboard_points'];
+
+                return $row;
+            });
     }
 
     /** @return Collection<int, array{criterion: Criterion, standings: Collection<int, array{participant: Participant, score: float, rank: int}>}> */
@@ -168,11 +190,15 @@ final class LeaderboardCalculator
      *     contest_wins: int,
      *     category_wins: array<int, int>,
      *     recorded_wins: int,
+     *     finalized_points: float,
+     *     pending_points: float,
+     *     gross_points: float,
+     *     overall_deduction: float,
      *     leaderboard_points: float,
      *     contests_entered: int
      * }>
      */
-    public function overallStandings(Event $event): Collection
+    public function overallStandings(Event $event, bool $applyEventDeductions = true): Collection
     {
         if (! $this->eventRelationsAreLoaded($event)) {
             $event->load([
@@ -199,6 +225,8 @@ final class LeaderboardCalculator
                         'contest_wins' => 0,
                         'category_wins' => $emptyCategoryWins,
                         'recorded_wins' => 0,
+                        'finalized_points' => 0.0,
+                        'pending_points' => 0.0,
                         'leaderboard_points' => 0.0,
                         'contests_entered' => 0,
                     ];
@@ -212,6 +240,8 @@ final class LeaderboardCalculator
 
                     $totals[$participantId]['recorded_wins'] += $row['wins'] ?? 0;
                     $totals[$participantId]['leaderboard_points'] += $row['leaderboard_points'];
+                    $pointStatus = $competition->scoresAreFinalized() ? 'finalized_points' : 'pending_points';
+                    $totals[$participantId][$pointStatus] += $row['leaderboard_points'];
 
                     if (! isset($enteredTeams[$participantId])) {
                         $totals[$participantId]['contests_entered']++;
@@ -222,7 +252,26 @@ final class LeaderboardCalculator
         }
 
         return collect(array_values($totals))
-            ->sort(function (array $left, array $right): int {
+            ->map(static function (array $row) use ($applyEventDeductions): array {
+                $row['gross_points'] = round($row['leaderboard_points'], 2);
+                $row['finalized_points'] = round($row['finalized_points'], 2);
+                $row['pending_points'] = round($row['pending_points'], 2);
+                $row['overall_deduction'] = $applyEventDeductions
+                    ? (float) ($row['participant']->overall_deduction ?? 0)
+                    : 0.0;
+                $row['leaderboard_points'] = round(max(0.0, $row['gross_points'] - $row['overall_deduction']), 2);
+
+                return $row;
+            })
+            ->sort(function (array $left, array $right) use ($event): int {
+                if ($event->leaderboard_frozen) {
+                    $pointsComparison = $right['leaderboard_points'] <=> $left['leaderboard_points'];
+
+                    if ($pointsComparison !== 0) {
+                        return $pointsComparison;
+                    }
+                }
+
                 return ($right['contest_wins'] <=> $left['contest_wins'])
                     ?: ($right['recorded_wins'] <=> $left['recorded_wins'])
                     ?: ($right['leaderboard_points'] <=> $left['leaderboard_points'])

@@ -86,8 +86,12 @@ Route::middleware(['auth', 'active', 'credentials-updated', 'visible-event', 'ar
         ->name('events.tie-ranking.update');
     Route::get('/events/{event}/leaderboard', [EventLeaderboardController::class, 'show'])
         ->name('events.leaderboard');
+    Route::patch('/events/{event}/overall-deductions', [EventLeaderboardController::class, 'updateDeductions'])
+        ->name('events.overall-deductions.update');
     Route::get('/events/{event}/results/download', [EventResultsDownloadController::class, 'download'])
         ->name('events.results.download');
+    Route::get('/events/{event}/results/export/{format}', [EventResultsDownloadController::class, 'export'])
+        ->where('format', 'xlsx|pdf')->name('events.results.export');
 
     Route::scopeBindings()->group(function (): void {
         Route::post('/events/{event}/participants', [ParticipantController::class, 'store'])

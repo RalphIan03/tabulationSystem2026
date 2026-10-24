@@ -25,7 +25,7 @@
                     ])>Public leaderboard {{ $event->leaderboard_frozen ? 'frozen' : 'live' }}</span>
                 </div>
                 <h2 class="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">{{ $event->name }}</h2>
-                <p class="mt-3 max-w-2xl text-sm leading-6 text-maroon-100/80">See each contest's current ranking and the overall standings calculated from contest wins.</p>
+                <p class="mt-3 max-w-2xl text-sm leading-6 text-maroon-100/80">See each contest’s current ranking and overall points. Overall standings use highest net points while frozen, and contest wins while live.</p>
             </div>
             <a href="{{ route('events.show', $event) }}" class="inline-flex h-11 items-center justify-center rounded-xl bg-white px-5 text-sm font-semibold text-maroon-800 transition hover:bg-maroon-50">Back to event</a>
         </div>
@@ -38,11 +38,72 @@
         <a href="{{ route('leaderboards.show', $event) }}" target="_blank" rel="noopener noreferrer" class="mt-2 block break-all text-xs font-medium text-slate-500 hover:underline">Event-specific: {{ route('leaderboards.show', $event) }}</a>
     </section>
 
+    <section id="overall-deductions" class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <form method="POST" action="{{ route('events.overall-deductions.update', $event, false) }}" data-loading-text="Saving overall deductions…">
+            @csrf
+            @method('PATCH')
+            <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-950">Overall point deductions</h3>
+                    <p class="mt-1 max-w-3xl text-sm text-slate-500">Deduct points once from each main team’s event total, including points from linked teams. Contest scores and wins are unchanged. Frozen overall standings use net points; live standings use contest wins, with net points breaking ties.</p>
+                    <p class="mt-1 text-xs text-slate-500">Staff totals include pending contest points; public totals include finalized contests only. Net points cannot fall below zero. Enter 0 or leave blank to remove a deduction. Totals refresh after saving.</p>
+                </div>
+                @if ($deductionParticipants->isNotEmpty())
+                    <button type="submit" class="h-11 shrink-0 rounded-xl bg-maroon-700 px-5 text-sm font-semibold text-white transition hover:bg-maroon-800">Save overall deductions</button>
+                @endif
+            </div>
+            @error('deductions')<p role="alert" class="px-6 py-3 text-sm text-red-600">{{ $message }}</p>@enderror
+            @if ($deductionParticipants->isNotEmpty())
+                <div class="score-table-scroll" role="region" aria-label="Overall event point deductions" tabindex="0">
+                    <table class="w-full min-w-[680px] text-left text-sm">
+                        <thead class="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+                            <tr>
+                                <th scope="col" class="px-6 py-3.5 font-semibold">Main team / participant</th>
+                                <th scope="col" class="px-5 py-3.5 text-right font-semibold">Earned points</th>
+                                <th scope="col" class="px-5 py-3.5 text-center font-semibold">Overall deduction</th>
+                                <th scope="col" class="px-6 py-3.5 text-right font-semibold">Net overall points</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach ($deductionParticipants as $participant)
+                                @php
+                                    $overall = $overallPointsByParticipant->get($participant->id);
+                                    $grossPoints = (float) ($overall['gross_points'] ?? 0);
+                                    $deduction = (float) ($participant->overall_deduction ?? 0);
+                                    $netPoints = $overall['leaderboard_points'] ?? max(0, $grossPoints - $deduction);
+                                    $field = "deductions.{$participant->id}";
+                                @endphp
+                                <tr data-overall-deduction-row="{{ $participant->id }}">
+                                    <td class="px-6 py-4 font-semibold text-slate-900">{{ $participant->name }}</td>
+                                    <td class="px-5 py-4 text-right tabular-nums">{{ number_format($grossPoints, 2) }}</td>
+                                    <td class="px-5 py-4 text-center">
+                                        <input name="deductions[{{ $participant->id }}]" type="number" min="0" max="9999999999.99" step="0.01" value="{{ old($field, $deduction) }}" aria-label="Overall deduction for {{ $participant->name }}" class="h-10 w-36 rounded-lg border border-amber-300 bg-amber-50/50 px-3 text-center text-sm outline-none focus:border-amber-600 focus:ring-4 focus:ring-maroon-600/10">
+                                        @error($field)<p role="alert" class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                                    </td>
+                                    <td class="px-6 py-4 text-right font-bold tabular-nums text-maroon-700">{{ number_format($netPoints, 2) }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @else
+                <p class="px-6 py-8 text-sm text-slate-500">Add a main team or participant to the event before entering overall deductions.</p>
+            @endif
+        </form>
+    </section>
+
     <section class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div class="border-b border-slate-200 px-6 py-5">
-            <p class="text-sm font-semibold text-maroon-700">Overall winner</p>
-            <h3 class="mt-1 text-xl font-semibold text-slate-950">Overall standings by contest wins</h3>
-            <p class="mt-1 text-sm text-slate-500">First-place finishes are summed across contests and shown by category. Recorded match wins and leaderboard points break ties.</p>
+        <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
+            <div>
+                <p class="text-sm font-semibold text-maroon-700">Overall winner</p>
+                <h3 class="mt-1 text-xl font-semibold text-slate-950">{{ $event->leaderboard_frozen ? 'Overall standings by net points' : 'Overall standings by contest wins' }}</h3>
+                <p class="mt-1 text-sm text-slate-500">{{ $event->leaderboard_frozen ? 'Highest points after all contest and overall deductions receive the highest rank.' : 'First-place finishes are summed across contests and shown by category. Recorded match wins and net leaderboard points after overall deductions break ties.' }}</p>
+                <p class="mt-1 text-xs text-amber-700">Pending points are provisional and hidden from the public leaderboard. Current net points include both finalized and pending points.</p>
+            </div>
+            <div class="flex shrink-0 flex-wrap gap-2">
+                <a href="{{ route('events.results.export', [$event, 'format' => 'xlsx'], false) }}" download data-export-download data-loading-text="Exporting overall Excel report…" class="inline-flex h-10 items-center justify-center rounded-xl bg-maroon-700 px-4 text-sm font-semibold text-white hover:bg-maroon-800">Overall Excel</a>
+                <a href="{{ route('events.results.export', [$event, 'format' => 'pdf'], false) }}" download data-export-download data-loading-text="Exporting overall PDF report…" class="inline-flex h-10 items-center justify-center rounded-xl border border-maroon-200 px-4 text-sm font-semibold text-maroon-700 hover:bg-maroon-50">Overall PDF</a>
+            </div>
         </div>
 
         @if ($overallStandings->isNotEmpty())
@@ -64,7 +125,7 @@
             </div>
 
             <div class="overflow-x-auto">
-                <table class="w-full min-w-[760px] text-left text-sm">
+                <table id="overall-standings-table" class="w-full min-w-[760px] text-left text-sm">
                     <thead class="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
                         <tr>
                             <th class="px-6 py-3.5 font-semibold">Rank</th>
@@ -75,7 +136,9 @@
                             @endforeach
                             <th class="px-5 py-3.5 text-center font-semibold">Recorded wins</th>
                             <th class="px-5 py-3.5 text-center font-semibold">Contests entered</th>
-                            <!-- <th class="px-6 py-3.5 text-right font-semibold">Leaderboard points</th> -->
+                            <th class="px-5 py-3.5 text-right font-semibold">Finalized points</th>
+                            <th class="px-5 py-3.5 text-right font-semibold text-amber-700">Pending points</th>
+                            <th class="px-6 py-3.5 text-right font-semibold">Net points</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
@@ -89,7 +152,9 @@
                                 @endforeach
                                 <td class="px-5 py-4 text-center text-slate-600">{{ $row['recorded_wins'] }}</td>
                                 <td class="px-5 py-4 text-center text-slate-600">{{ $row['contests_entered'] }}</td>
-                                <!-- <td class="px-6 py-4 text-right font-semibold text-slate-700">{{ number_format($row['leaderboard_points'], 2) }}</td> -->
+                                <td class="px-5 py-4 text-right tabular-nums text-slate-700">{{ number_format($row['finalized_points'], 2) }}</td>
+                                <td class="px-5 py-4 text-right font-semibold tabular-nums text-amber-700">{{ number_format($row['pending_points'], 2) }}</td>
+                                <td class="px-6 py-4 text-right font-semibold tabular-nums text-slate-700">{{ number_format($row['leaderboard_points'], 2) }}</td>
                             </tr>
                         @endforeach
                     </tbody>

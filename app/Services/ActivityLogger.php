@@ -23,6 +23,7 @@ final class ActivityLogger
         'events.toggle-status' => 'Changed event activation status',
         'events.tie-ranking.update' => 'Updated event tie ranking rule',
         'events.leaderboard-freeze' => 'Changed leaderboard freeze status',
+        'events.overall-deductions.update' => 'Updated overall event point deductions',
         'events.participants.store' => 'Added a participant',
         'events.participants.update' => 'Updated a participant',
         'events.participants.destroy' => 'Deleted a participant',

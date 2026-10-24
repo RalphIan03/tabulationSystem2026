@@ -176,7 +176,7 @@ final class CompetitionScoreExporter
         return $this->xlsxWorksheet($this->worksheet($report));
     }
 
-    public function xlsxWorksheet(string $worksheet): string
+    public function xlsxWorksheet(string $worksheet, string $sheetName = 'Scores'): string
     {
         if (! class_exists(ZipArchive::class)) {
             throw new RuntimeException('The PHP ZIP extension is required for Excel exports.');
@@ -209,7 +209,7 @@ final class CompetitionScoreExporter
             $archive->addFromString('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
                 .'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
                 .' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-                .'<sheets><sheet name="Scores" sheetId="1" r:id="rId1"/></sheets></workbook>');
+                .'<sheets><sheet name="'.$this->xmlText($sheetName).'" sheetId="1" r:id="rId1"/></sheets></workbook>');
             $archive->addFromString('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
                 .'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
                 .'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
@@ -407,6 +407,31 @@ final class CompetitionScoreExporter
         return htmlspecialchars($clean, ENT_XML1 | ENT_QUOTES, 'UTF-8');
     }
 
+    /**
+     * @param  list<string>  $metadata
+     * @param  list<string>  $headers
+     * @param  list<float>  $widths
+     * @param  list<list<string>>  $rows
+     * @param  list<string>  $signatories
+     * @param  list<string>  $signatureTeams
+     */
+    public function tabularPdf(string $title, array $metadata, array $headers, array $widths, array $rows, array $signatories = [], array $signatureTeams = []): string
+    {
+        return $this->pdf([
+            'title' => $title,
+            'metadata' => $metadata,
+            'table' => ['headers' => $headers, 'widths' => $widths],
+            'uses_criteria' => false,
+            'uses_ranking' => false,
+            'criteria' => [],
+            'criterion_ranks' => [],
+            'rows' => array_map(static fn (array $values): array => ['values' => $values], $rows),
+            'signatories' => $signatories,
+            'signature_teams' => $signatureTeams,
+            'empty_message' => 'No ranked results are available for this event.',
+        ]);
+    }
+
     /** @param array<string, mixed> $report */
     public function pdf(array $report): string
     {
@@ -424,7 +449,9 @@ final class CompetitionScoreExporter
 
         foreach ($judgeTables as $judgeNumber) {
             foreach ($criterionGroups as $groupIndex => $criteria) {
-                [$headers, $widths] = $this->pdfColumns($report['uses_criteria'], $report['uses_ranking'], $criteria, $judgeNumber);
+                [$headers, $widths] = isset($report['table'])
+                    ? [$report['table']['headers'], $report['table']['widths']]
+                    : $this->pdfColumns($report['uses_criteria'], $report['uses_ranking'], $criteria, $judgeNumber);
                 $headerCells = $this->pdfCellLines($headers, $widths);
                 $headerHeight = $this->pdfRowHeight($headerCells);
                 $headingHeight = $report['uses_criteria'] ? 26 + (count($criterionGroups) > 1 ? 12 : 0) : 0;
@@ -432,7 +459,8 @@ final class CompetitionScoreExporter
                 $tableHeight = $headingHeight + $headerHeight;
 
                 foreach ($report['rows'] as $index => $row) {
-                    $cells = $this->pdfCellLines($this->pdfRowValues($row, $criteria, $report['uses_criteria'], $report['uses_ranking'], $judgeNumber), $widths);
+                    $values = isset($report['table']) ? $row['values'] : $this->pdfRowValues($row, $criteria, $report['uses_criteria'], $report['uses_ranking'], $judgeNumber);
+                    $cells = $this->pdfCellLines($values, $widths);
                     $rowHeight = $this->pdfRowHeight($cells);
                     $preparedRows[] = ['index' => $index, 'cells' => $cells, 'height' => $rowHeight];
                     $tableHeight += $rowHeight;
@@ -478,7 +506,7 @@ final class CompetitionScoreExporter
                 }
 
                 if ($report['rows'] === []) {
-                    $content .= $this->pdfDrawText($this->pdfText('No participants have been added to this event.'), 36, $cursor - 18, 9);
+                    $content .= $this->pdfDrawText($this->pdfText($report['empty_message'] ?? 'No participants have been added to this event.'), 36, $cursor - 18, 9);
                     $cursor -= 24;
                 }
 
@@ -638,9 +666,9 @@ final class CompetitionScoreExporter
     private function pdfPageHeader(array $report): array
     {
         $content = "0.42 0.07 0.16 rg\n";
-        $content .= $this->pdfDrawText($this->pdfText('Contest score report'), 30, 564, 15, true);
+        $content .= $this->pdfDrawText($this->pdfText($report['title'] ?? 'Contest score report'), 30, 564, 15, true);
         $content .= "0.42 0.07 0.16 RG 1 w 30 551 m 812 551 l S\n0.16 0.16 0.16 rg\n";
-        $metadata = [
+        $metadata = $report['metadata'] ?? [
             'Event: '.$report['event'].'  |  Category: '.$report['category'],
             'Contest: '.$report['competition'].'  |  Scoring: '.$report['scoring_method'],
             'Status: '.$report['status'].'  |  Exported: '.$report['exported_at'],

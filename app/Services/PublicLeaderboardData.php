@@ -162,7 +162,7 @@ final class PublicLeaderboardData
             'categories.competitions.results.criterionScores',
         ]);
 
-        return $this->calculator->overallStandings($event)
+        return $this->calculator->overallStandings($event, applyEventDeductions: $scope !== 'category')
             ->map(fn (array $row, int $index): array => [
                 'rank' => $index + 1,
                 ...$this->participantColumns($row['participant']),

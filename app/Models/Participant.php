@@ -10,7 +10,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 final class Participant extends Model
 {
-    protected $fillable = ['name', 'reference_no', 'profile_picture_path', 'parent_participant_id'];
+    protected $fillable = ['name', 'reference_no', 'profile_picture_path', 'parent_participant_id', 'overall_deduction'];
+
+    protected function casts(): array
+    {
+        return [
+            'overall_deduction' => 'decimal:2',
+        ];
+    }
 
     public function parentTeam(): BelongsTo
     {

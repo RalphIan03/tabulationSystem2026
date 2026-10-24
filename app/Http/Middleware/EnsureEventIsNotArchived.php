@@ -17,6 +17,7 @@ final class EnsureEventIsNotArchived
         $downloadRoutes = [
             'events.show',
             'events.results.download',
+            'events.results.export',
             'events.categories.competitions.scores.export',
         ];
 
