@@ -120,13 +120,15 @@ final class OverallResultsReportTest extends TestCase
         $this->assertTrue($document->loadXML($sheet));
         $this->assertStringContainsString('name="Overall results"', $workbook);
         $this->assertStringContainsString('Provisional - unfinished contests remain', $sheet);
-        $this->assertStringContainsString('<c r="D10"><v>100</v></c><c r="E10"><v>35</v></c><c r="F10"><v>10</v></c><c r="G10"><v>90</v></c><c r="H10"><v>125</v></c>', $sheet);
+        $this->assertStringContainsString('<c r="C10"><v>10</v></c><c r="D10"><v>90</v></c>', $sheet);
+        $this->assertStringContainsString('Category point totals: Sports', $sheet);
+        $this->assertStringContainsString('<c r="B15"><v>100</v></c><c r="C15"><v>35</v></c><c r="D15"><v>135</v></c>', $sheet);
         $this->assertStringContainsString('=SUM(A1:A2) &amp; &lt;unsafe&gt;', $sheet);
         $this->assertStringNotContainsString('<f>', $sheet);
         $this->assertStringContainsString('Chief Auditor', $sheet);
         $this->assertStringContainsString('Team signatures', $sheet);
         $this->assertStringContainsString('ySplit="9"', $sheet);
-        $this->assertStringContainsString('autoFilter ref="A9:H11"', $sheet);
+        $this->assertStringContainsString('autoFilter ref="A9:D11"', $sheet);
         $this->assertStringNotContainsString('TEAM A2</t>', $sheet);
     }
 
@@ -142,7 +144,9 @@ final class OverallResultsReportTest extends TestCase
         $this->assertStringContainsString('(Overall results report)', $content);
         $this->assertStringContainsString('(Pending points)', $content);
         $this->assertStringContainsString('(35.00)', $content);
-        $this->assertStringContainsString('(125.00)', $content);
+        $this->assertStringContainsString('(90.00)', $content);
+        $this->assertStringContainsString('(Category point totals: Sports)', $content);
+        $this->assertStringNotContainsString('(Current net points)', $content);
         $this->assertStringContainsString('(Chief Auditor)', $content);
         $this->assertStringContainsString('(Team signatures)', $content);
         $this->assertTrue(strpos($content, '(TEAM A)') < strpos($content, '(TEAM B)'));
@@ -171,9 +175,9 @@ final class OverallResultsReportTest extends TestCase
         $this->assertStringContainsString('TEAM B</t>', $sheet);
         $this->assertTrue(strpos($sheet, 'TEAM B</t>') < strpos($sheet, 'TEAM A</t>'));
         $this->assertStringContainsString('Status: Finalized | Finalized contests: 2 of 2', $sheet);
-        $this->assertStringContainsString('<c r="E10"><v>0</v></c>', $sheet);
-        $this->assertStringContainsString('<c r="H10"><v>80</v></c>', $sheet);
-        $this->assertStringContainsString('<c r="H11"><v>35</v></c>', $sheet);
+        $this->assertStringContainsString('<c r="D10"><v>80</v></c>', $sheet);
+        $this->assertStringContainsString('<c r="D11"><v>35</v></c>', $sheet);
+        $this->assertStringContainsString('<c r="C15"><v>0</v></c>', $sheet);
     }
 
     public function test_large_overall_pdf_repeats_table_headers_across_pages(): void
@@ -229,6 +233,142 @@ final class OverallResultsReportTest extends TestCase
         [$event] = $this->scoredEvent();
 
         $this->actingAs($user)->get(route('events.results.export', [$event, 'format' => 'html']))->assertNotFound();
+    }
+
+    public function test_category_totals_sum_contest_points_and_linked_teams_without_reapplying_event_deductions(): void
+    {
+        $user = User::factory()->create();
+        [$event, $pending, $teamA, $teamB] = $this->scoredEvent();
+        $arts = $event->categories()->create(['name' => 'Arts']);
+        $contest = $arts->competitions()->create(['name' => 'Dance', 'scoring_method' => CompetitionScoringMethod::Wins, 'scores_finalized_at' => now()]);
+        $contest->rankScores()->createMany([['rank' => 1, 'points' => 30], ['rank' => 2, 'points' => 15]]);
+        $contest->results()->createMany([['participant_id' => $teamB->id, 'wins' => 2], ['participant_id' => $teamA->id, 'wins' => 1, 'deduction' => 5]]);
+        $event->categories()->create(['name' => 'Empty category']);
+        $otherEvent = Event::factory()->create(['name' => 'Unrelated secret event']);
+        $otherEvent->categories()->create(['name' => 'Secret category']);
+
+        $response = $this->actingAs($user)->get(route('events.results.export', [$event, 'format' => 'xlsx']))->assertOk();
+
+        [$sheet] = $this->workbookXml($response->getContent());
+        $rows = $this->sheetRows($sheet);
+        $this->assertSame(['Rank', 'Participant', 'Overall deduction', 'Finalized points after deduction'], $rows[8]);
+        $this->assertSame(['1', 'TEAM B', '0', '90'], $rows[9]);
+        $this->assertSame(['2', 'TEAM A', '10', '100'], $rows[10]);
+        $artsHeading = array_search(['Category point totals: Arts'], $rows, true);
+        $sportsHeading = array_search(['Category point totals: Sports'], $rows, true);
+        $this->assertNotFalse($artsHeading);
+        $this->assertNotFalse($sportsHeading);
+        $this->assertSame(['TEAM B', '30', '0', '30'], $rows[$artsHeading + 2]);
+        $this->assertSame(['TEAM A', '10', '0', '10'], $rows[$artsHeading + 3]);
+        $this->assertSame(['TEAM A', '100', '35', '135'], $rows[$sportsHeading + 2]);
+        $this->assertSame(['TEAM B', '60', '20', '80'], $rows[$sportsHeading + 3]);
+        $this->assertStringContainsString('Category point totals: Empty category', $sheet);
+        $this->assertStringNotContainsString('Secret category', $sheet);
+        $this->assertStringNotContainsString('TEAM A2</t>', $sheet);
+    }
+
+    public function test_summary_ranking_ignores_pending_wins_and_clamps_finalized_points_after_deduction(): void
+    {
+        $user = User::factory()->create();
+        [$event, $pending, $teamA, $teamB] = $this->scoredEvent();
+        $teamA->update(['overall_deduction' => 150]);
+        $teamC = $event->participants()->create(['name' => 'Pending only', 'overall_deduction' => 10]);
+        $pending->results()->create(['participant_id' => $teamC->id, 'wins' => 5]);
+        $pending->results()->where('participant_id', $teamB->id)->update(['wins' => 6]);
+        $event->update(['leaderboard_frozen' => true]);
+
+        $response = $this->actingAs($user)->get(route('events.results.export', [$event, 'format' => 'xlsx']))->assertOk();
+
+        [$sheet] = $this->workbookXml($response->getContent());
+        $rows = $this->sheetRows($sheet);
+        $this->assertSame(['1', 'TEAM B', '0', '60'], $rows[9]);
+        $this->assertSame(['2', 'TEAM A', '150', '0'], $rows[10]);
+        $this->assertSame(['', 'Pending only', '10', '0'], $rows[11]);
+        $this->assertStringNotContainsString('Current net points', $sheet);
+    }
+
+    #[DataProvider('staffFormats')]
+    public function test_staff_download_all_event_results_and_event_page_has_relative_download_buttons(AccountRole $role, string $format, string $mime): void
+    {
+        $user = User::factory()->create(['role' => $role]);
+        [$event] = $this->scoredEvent();
+        URL::forceScheme('http');
+        $path = route('events.results.export-all', [$event, 'format' => $format], false);
+
+        $page = $this->actingAs($user)->get('https://tabulation.example'.route('events.show', $event, false));
+
+        $page->assertSee('href="'.$path.'" download data-export-download', false)->assertSee('All results PDF')->assertSee('All results Excel');
+        $response = $this->get('https://tabulation.example'.$path)->assertOk()
+            ->assertDownload('all-results-event-games-'.$event->id.'.'.$format)
+            ->assertHeader('Content-Type', $mime)->assertHeader('Cache-Control', 'no-store, private');
+        $this->assertStringStartsWith($format === 'pdf' ? '%PDF-1.4' : 'PK', $response->getContent());
+    }
+
+    #[DataProvider('formats')]
+    public function test_all_results_include_ordered_contests_individual_judges_and_signatures_at_the_end(string $format): void
+    {
+        $user = User::factory()->create();
+        [$event, $pending, $teamA, $teamB] = $this->scoredEvent();
+        $contest = $pending->category->competitions()->create(['name' => 'Z judged contest', 'judge_count' => 2]);
+        $criterion = $contest->criteria()->create(['name' => 'Technique', 'max_score' => 100]);
+        $contest->rankScores()->create(['rank' => 1, 'points' => 75]);
+        $result = $contest->results()->create(['participant_id' => $teamA->id, 'deduction' => 2]);
+        $result->criterionScores()->createMany([
+            ['criterion_id' => $criterion->id, 'judge_number' => 1, 'score' => 90],
+            ['criterion_id' => $criterion->id, 'judge_number' => 2, 'score' => 80],
+        ]);
+        $contest->results()->create(['participant_id' => $teamB->id, 'has_entry' => false]);
+        $pending->category->competitions()->create(['name' => 'Unstarted contest', 'scoring_method' => CompetitionScoringMethod::Wins]);
+
+        $response = $this->actingAs($user)->get(route('events.results.export-all', [$event, 'format' => $format]))->assertOk();
+
+        $content = $response->getContent();
+
+        if ($format === 'xlsx') {
+            [$content, $workbook] = $this->workbookXml($content);
+            $this->assertStringContainsString('name="All results"', $workbook);
+            $rows = $this->sheetRows($content);
+            $judge = array_search(['Sports / Z judged contest | Pending finalization | Judge 1 scores'], $rows, true);
+            $this->assertNotFalse($judge);
+            $this->assertSame(['Rank', 'Participant', 'Status', 'Technique', 'Judge total'], $rows[$judge + 1]);
+            $this->assertSame(['1', 'TEAM A', 'Scored', '90', '90'], $rows[$judge + 2]);
+            $this->assertSame(['', 'TEAM B', 'No entry', '0', '0'], $rows[$judge + 4]);
+            $summary = array_search(['Sports / Z judged contest | Pending finalization | Averaged scores'], $rows, true);
+            $this->assertNotFalse($summary);
+            $this->assertSame(['1', 'TEAM A', 'Scored', '85', '85', '2', '83', '75'], $rows[$summary + 2]);
+            $this->assertStringNotContainsString('<f>', $content);
+        } else {
+            $this->assertStringContainsString('/MediaBox [0 0 842 595]', $content);
+            $this->assertStringContainsString('(85.00)', $content);
+            $this->assertStringContainsString('(83.00)', $content);
+        }
+
+        $this->assertStringContainsString('Finalized race | Finalized', $content);
+        $this->assertStringContainsString('Pending race | Pending finalization', $content);
+        $this->assertStringContainsString('Unstarted contest | Not started', $content);
+        $this->assertStringContainsString('Judge 1 scores', $content);
+        $this->assertStringContainsString('Judge 2 scores', $content);
+        $this->assertStringContainsString('Best on Technique', $content);
+        $this->assertTrue(strpos($content, 'Finalized points after') < strpos($content, 'Finalized race | Finalized'));
+        $this->assertTrue(strpos($content, 'Finalized race | Finalized') < strpos($content, 'Pending race | Pending finalization'));
+        $this->assertTrue(strpos($content, 'Category point totals: Sports') < strpos($content, 'Chief Auditor'));
+        $this->assertStringContainsString('Team signatures', $content);
+    }
+
+    #[DataProvider('formats')]
+    public function test_all_results_downloads_preserve_archive_visibility_and_guest_protection(string $format): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        $auditor = User::factory()->create(['role' => AccountRole::Auditor]);
+        [$event] = $this->scoredEvent();
+        $event->update(['archived_at' => now(), 'is_active' => false]);
+        $route = route('events.results.export-all', [$event, 'format' => $format]);
+
+        $this->get($route)->assertRedirect(route('login'));
+        $this->actingAs($admin)->get($route)->assertOk()->assertDownload();
+        $this->get(route('events.show', $event))->assertSee('All results PDF')->assertSee('All results Excel');
+        $this->actingAs($auditor)->get($route)->assertNotFound();
+        $this->actingAs($admin)->get(route('events.results.export-all', [$event, 'format' => 'html']))->assertNotFound();
     }
 
     public static function roles(): array
@@ -299,5 +439,27 @@ final class OverallResultsReportTest extends TestCase
         @$document->loadHTML($html);
 
         return new DOMXPath($document);
+    }
+
+    /** @return list<list<string>> */
+    private function sheetRows(string $sheet): array
+    {
+        $document = new DOMDocument;
+        $this->assertTrue($document->loadXML($sheet));
+        $xpath = new DOMXPath($document);
+        $xpath->registerNamespace('s', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+        $rows = [];
+
+        foreach ($xpath->query('//s:sheetData/s:row') as $row) {
+            $values = [];
+
+            foreach ($xpath->query('s:c', $row) as $cell) {
+                $values[] = $cell->textContent;
+            }
+
+            $rows[] = $values;
+        }
+
+        return $rows;
     }
 }

@@ -18,8 +18,8 @@ final class CompetitionScoreExporter
     /** @return array<string, mixed> */
     public function report(Event $event, Category $category, Competition $competition): array
     {
-        $event->load(['participants' => fn ($query) => $query->orderBy('name')]);
-        $competition->load([
+        $event->loadMissing(['participants' => fn ($query) => $query->orderBy('name')]);
+        $competition->loadMissing([
             'criteria' => fn ($query) => $query->orderBy('name'),
             'rankScores',
             'results.participant.parentTeam',
@@ -432,115 +432,96 @@ final class CompetitionScoreExporter
         ]);
     }
 
+    /**
+     * @param  array<string, mixed>  $report
+     * @return list<array{title: string, subtitle?: string, headers: list<string>, widths: list<float>, rows: list<list<int|float|string|null>>}>
+     */
+    public function resultTables(array $report): array
+    {
+        if (isset($report['tables'])) {
+            return $report['tables'];
+        }
+
+        if (isset($report['table'])) {
+            return [['title' => '', ...$report['table'], 'rows' => array_column($report['rows'], 'values')]];
+        }
+
+        $groups = $report['uses_criteria'] ? array_chunk($report['criteria'], 6) : [];
+        $groups = $groups === [] ? [[]] : $groups;
+        $judges = $report['uses_criteria'] ? array_merge([null], range(1, $report['judge_count'])) : [null];
+        $tables = [];
+
+        foreach ($judges as $judge) {
+            foreach ($groups as $groupIndex => $criteria) {
+                [$headers, $widths] = $this->pdfColumns($report['uses_criteria'], $report['uses_ranking'], $criteria, $judge);
+                $title = $report['uses_criteria'] ? ($judge === null ? 'Averaged scores' : "Judge {$judge} scores") : '';
+
+                $tables[] = [
+                    'title' => $title,
+                    'subtitle' => count($groups) > 1
+                        ? 'Criteria columns '.($groupIndex * 6 + 1).'-'.min(($groupIndex + 1) * 6, count($report['criteria'])).' of '.count($report['criteria'])
+                        : '',
+                    'headers' => $headers,
+                    'widths' => $widths,
+                    'rows' => array_map(fn (array $row): array => $this->tableRowValues($row, $criteria, $report['uses_criteria'], $report['uses_ranking'], $judge), $report['rows']),
+                ];
+            }
+        }
+
+        foreach ($report['criterion_ranks'] as $criterion) {
+            if ($criterion['rows'] !== []) {
+                $tables[] = [
+                    'title' => 'Best on '.$criterion['name'],
+                    'headers' => ['Rank', 'Participant', 'Average score'],
+                    'widths' => [70.0, 502.0, 210.0],
+                    'rows' => array_map(static fn (array $row): array => [$row['rank'], $row['participant'], $row['score']], $criterion['rows']),
+                ];
+            }
+        }
+
+        return $tables;
+    }
+
     /** @param array<string, mixed> $report */
     public function pdf(array $report): string
     {
-        $criterionGroups = $report['uses_criteria'] ? array_chunk($report['criteria'], 6) : [];
-
-        if ($criterionGroups === []) {
-            $criterionGroups = [[]];
-        }
-
         $pages = [];
         [$content, $cursor] = $this->pdfPageHeader($report);
         $pageStartCursor = $cursor;
         $hasTableOnPage = false;
-        $judgeTables = $report['uses_criteria'] ? array_merge([null], range(1, $report['judge_count'])) : [null];
 
-        foreach ($judgeTables as $judgeNumber) {
-            foreach ($criterionGroups as $groupIndex => $criteria) {
-                [$headers, $widths] = isset($report['table'])
-                    ? [$report['table']['headers'], $report['table']['widths']]
-                    : $this->pdfColumns($report['uses_criteria'], $report['uses_ranking'], $criteria, $judgeNumber);
-                $headerCells = $this->pdfCellLines($headers, $widths);
-                $headerHeight = $this->pdfRowHeight($headerCells);
-                $headingHeight = $report['uses_criteria'] ? 26 + (count($criterionGroups) > 1 ? 12 : 0) : 0;
-                $preparedRows = [];
-                $tableHeight = $headingHeight + $headerHeight;
-
-                foreach ($report['rows'] as $index => $row) {
-                    $values = isset($report['table']) ? $row['values'] : $this->pdfRowValues($row, $criteria, $report['uses_criteria'], $report['uses_ranking'], $judgeNumber);
-                    $cells = $this->pdfCellLines($values, $widths);
-                    $rowHeight = $this->pdfRowHeight($cells);
-                    $preparedRows[] = ['index' => $index, 'cells' => $cells, 'height' => $rowHeight];
-                    $tableHeight += $rowHeight;
-                }
-
-                if ($preparedRows === []) {
-                    $tableHeight += 24;
-                }
-
-                $gap = $hasTableOnPage ? 16 : 0;
-                $firstRowHeight = $preparedRows[0]['height'] ?? 24;
-                $fitsInRemainingSpace = $cursor - $gap - $tableHeight >= 38;
-                $fitsOnFreshPage = $tableHeight <= $pageStartCursor - 38;
-                $canStartHere = $cursor - $gap - $headingHeight - $headerHeight - $firstRowHeight >= 38;
-
-                if ($hasTableOnPage && ! $fitsInRemainingSpace && ($fitsOnFreshPage || ! $canStartHere)) {
-                    $pages[] = $content;
-                    [$content, $cursor] = $this->pdfPageHeader($report);
-                    $hasTableOnPage = false;
-                }
-
-                if ($hasTableOnPage) {
-                    $cursor -= 16;
-                }
-
-                [$heading, $cursor] = $this->pdfTableHeading($report, $groupIndex, count($criterionGroups), $judgeNumber, $cursor);
-                $content .= $heading;
-                $content .= $this->pdfTableRow($headerCells, $widths, $cursor, $headerHeight, true);
-                $cursor -= $headerHeight;
-
-                foreach ($preparedRows as $row) {
-                    if ($cursor - $row['height'] < 38) {
-                        $pages[] = $content;
-                        [$content, $cursor] = $this->pdfPageHeader($report);
-                        [$heading, $cursor] = $this->pdfTableHeading($report, $groupIndex, count($criterionGroups), $judgeNumber, $cursor);
-                        $content .= $heading;
-                        $content .= $this->pdfTableRow($headerCells, $widths, $cursor, $headerHeight, true);
-                        $cursor -= $headerHeight;
-                    }
-
-                    $content .= $this->pdfTableRow($row['cells'], $widths, $cursor, $row['height'], false, $row['index'] % 2 === 1);
-                    $cursor -= $row['height'];
-                }
-
-                if ($report['rows'] === []) {
-                    $content .= $this->pdfDrawText($this->pdfText($report['empty_message'] ?? 'No participants have been added to this event.'), 36, $cursor - 18, 9);
-                    $cursor -= 24;
-                }
-
-                $hasTableOnPage = true;
-            }
-        }
-
-        foreach ($report['criterion_ranks'] as $criterionRank) {
-            if ($criterionRank['rows'] === []) {
-                continue;
-            }
-
-            $widths = [70.0, 502.0, 210.0];
-            $headerCells = $this->pdfCellLines(['Rank', 'Participant', 'Average score'], $widths);
+        foreach ($this->resultTables($report) as $table) {
+            $widths = $table['widths'];
+            $headerCells = $this->pdfCellLines($table['headers'], $widths);
             $headerHeight = $this->pdfRowHeight($headerCells);
-            $preparedRows = [];
-            $tableHeight = 26 + $headerHeight;
+            $titleLines = $table['title'] === '' ? [] : $this->pdfWrapCell($table['title'], 782, 10);
 
-            foreach ($criterionRank['rows'] as $index => $rankedRow) {
-                $cells = $this->pdfCellLines([
-                    (string) $rankedRow['rank'],
-                    $rankedRow['participant'],
-                    $this->formattedNumber($rankedRow['score']),
-                ], $widths);
+            if (($table['subtitle'] ?? '') !== '') {
+                $titleLines = array_merge($titleLines, $this->pdfWrapCell($table['subtitle'], 782, 10));
+            }
+            $headingHeight = $titleLines === [] ? 0 : count($titleLines) * 12 + 14;
+            $preparedRows = [];
+            $tableHeight = $headingHeight + $headerHeight;
+
+            foreach ($table['rows'] as $index => $values) {
+                $cells = $this->pdfCellLines(array_map(
+                    fn (mixed $value): string => is_float($value) ? $this->formattedNumber($value) : ($value === null ? '-' : (string) $value),
+                    $values,
+                ), $widths);
                 $height = $this->pdfRowHeight($cells);
                 $preparedRows[] = ['cells' => $cells, 'height' => $height, 'index' => $index];
                 $tableHeight += $height;
+            }
+
+            if ($preparedRows === []) {
+                $tableHeight += 24;
             }
 
             $gap = $hasTableOnPage ? 16 : 0;
 
             if ($hasTableOnPage && $cursor - $gap - $tableHeight < 38
                 && ($tableHeight <= $pageStartCursor - 38
-                    || $cursor - $gap - 26 - $headerHeight - $preparedRows[0]['height'] < 38)) {
+                    || $cursor - $gap - $headingHeight - $headerHeight - ($preparedRows[0]['height'] ?? 24) < 38)) {
                 $pages[] = $content;
                 [$content, $cursor] = $this->pdfPageHeader($report);
                 $hasTableOnPage = false;
@@ -550,8 +531,8 @@ final class CompetitionScoreExporter
                 $cursor -= 16;
             }
 
-            $content .= $this->pdfDrawText($this->pdfText('Best on '.$criterionRank['name']), 30, $cursor - 2, 10, true);
-            $cursor -= 26;
+            [$heading, $cursor] = $this->pdfTableHeading($titleLines, $cursor);
+            $content .= $heading;
             $content .= $this->pdfTableRow($headerCells, $widths, $cursor, $headerHeight, true);
             $cursor -= $headerHeight;
 
@@ -559,14 +540,19 @@ final class CompetitionScoreExporter
                 if ($cursor - $row['height'] < 38) {
                     $pages[] = $content;
                     [$content, $cursor] = $this->pdfPageHeader($report);
-                    $content .= $this->pdfDrawText($this->pdfText('Best on '.$criterionRank['name']), 30, $cursor - 2, 10, true);
-                    $cursor -= 26;
+                    [$heading, $cursor] = $this->pdfTableHeading($titleLines, $cursor);
+                    $content .= $heading;
                     $content .= $this->pdfTableRow($headerCells, $widths, $cursor, $headerHeight, true);
                     $cursor -= $headerHeight;
                 }
 
                 $content .= $this->pdfTableRow($row['cells'], $widths, $cursor, $row['height'], false, $row['index'] % 2 === 1);
                 $cursor -= $row['height'];
+            }
+
+            if ($preparedRows === []) {
+                $content .= $this->pdfDrawText($this->pdfText($report['empty_message'] ?? 'No participants have been added to this event.'), 36, $cursor - 18, 9);
+                $cursor -= 24;
             }
 
             $hasTableOnPage = true;
@@ -691,61 +677,54 @@ final class CompetitionScoreExporter
     }
 
     /**
-     * @param  array<string, mixed>  $report
+     * @param  list<string>  $lines
      * @return array{string, float}
      */
-    private function pdfTableHeading(array $report, int $groupIndex, int $groupCount, ?int $judgeNumber, float $cursor): array
+    private function pdfTableHeading(array $lines, float $cursor): array
     {
-        if (! $report['uses_criteria']) {
+        if ($lines === []) {
             return ['', $cursor];
         }
 
-        $title = $judgeNumber === null ? 'Averaged scores' : "Judge {$judgeNumber} scores";
-        $content = $this->pdfDrawText($this->pdfText($title), 30, $cursor - 2, 10, true);
-        $cursor -= 17;
+        $content = '';
 
-        if ($groupCount > 1) {
-            $first = $groupIndex * 6 + 1;
-            $last = min(($groupIndex + 1) * 6, count($report['criteria']));
-            $label = "Criteria columns {$first}-{$last} of ".count($report['criteria']);
-            $content .= $this->pdfDrawText($this->pdfText($label), 30, $cursor, 9);
+        foreach ($lines as $line) {
+            $content .= $this->pdfDrawText($line, 30, $cursor - 2, 10, true);
             $cursor -= 12;
         }
 
-        return [$content, $cursor - 9];
+        return [$content, $cursor - 14];
     }
 
     /**
      * @param  array<string, mixed>  $row
      * @param  array<int, array{id: int, name: string, raw_name: string}>  $criteria
-     * @return array<int, string>
+     * @return list<int|float|string|null>
      */
-    private function pdfRowValues(array $row, array $criteria, bool $usesCriteria, bool $usesRanking, ?int $judgeNumber): array
+    private function tableRowValues(array $row, array $criteria, bool $usesCriteria, bool $usesRanking, ?int $judgeNumber): array
     {
-        $values = [$row['rank'] === null ? '-' : (string) $row['rank'], $row['participant'], $row['status']];
+        $values = [$row['rank'], $row['participant'], $row['status']];
 
         if ($judgeNumber !== null) {
             foreach ($criteria as $criterion) {
-                $values[] = $this->formattedNumber($row['judge_scores'][$judgeNumber][$criterion['id']]);
+                $values[] = $row['judge_scores'][$judgeNumber][$criterion['id']];
             }
 
-            $values[] = $this->formattedNumber($row['judge_totals'][$judgeNumber]);
+            $values[] = $row['judge_totals'][$judgeNumber];
 
             return $values;
         }
 
         if ($usesCriteria) {
             foreach ($criteria as $criterion) {
-                $values[] = $this->formattedNumber($row['scores'][$criterion['id']]);
+                $values[] = $row['scores'][$criterion['id']];
             }
         }
 
-        $values[] = $usesRanking
-            ? ($row['placement'] === null ? '-' : (string) $row['placement'])
-            : $this->formattedNumber($usesCriteria ? $row['gross'] : $row['wins']);
-        $values[] = $this->formattedNumber($row['deduction']);
-        $values[] = $this->formattedNumber($row['adjusted']);
-        $values[] = $this->formattedNumber($row['points']);
+        $values[] = $usesRanking ? $row['placement'] : ($usesCriteria ? $row['gross'] : ($row['wins'] === null ? null : (float) $row['wins']));
+        $values[] = $row['deduction'];
+        $values[] = $row['adjusted'];
+        $values[] = $row['points'];
 
         return $values;
     }

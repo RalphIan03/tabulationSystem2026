@@ -18,6 +18,7 @@ final class EnsureEventIsNotArchived
             'events.show',
             'events.results.download',
             'events.results.export',
+            'events.results.export-all',
             'events.categories.competitions.scores.export',
         ];
 

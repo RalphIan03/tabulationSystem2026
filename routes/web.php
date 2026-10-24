@@ -92,6 +92,8 @@ Route::middleware(['auth', 'active', 'credentials-updated', 'visible-event', 'ar
         ->name('events.results.download');
     Route::get('/events/{event}/results/export/{format}', [EventResultsDownloadController::class, 'export'])
         ->where('format', 'xlsx|pdf')->name('events.results.export');
+    Route::get('/events/{event}/results/all/{format}', [EventResultsDownloadController::class, 'exportAll'])
+        ->where('format', 'xlsx|pdf')->name('events.results.export-all');
 
     Route::scopeBindings()->group(function (): void {
         Route::post('/events/{event}/participants', [ParticipantController::class, 'store'])

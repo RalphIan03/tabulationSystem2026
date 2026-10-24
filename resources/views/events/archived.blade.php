@@ -18,6 +18,8 @@
         <a href="{{ route('events.results.download', $event, false) }}" data-export-download data-loading-text="Exporting event results…" class="mt-6 inline-flex items-center rounded-xl bg-white px-5 py-3 text-sm font-semibold text-maroon-800 transition hover:bg-maroon-50">Download event results (CSV)</a>
         <a href="{{ route('events.results.export', [$event, 'format' => 'xlsx'], false) }}" download data-export-download data-loading-text="Exporting overall Excel report…" class="mt-3 inline-flex items-center rounded-xl bg-white px-5 py-3 text-sm font-semibold text-maroon-800 transition hover:bg-maroon-50">Overall Excel</a>
         <a href="{{ route('events.results.export', [$event, 'format' => 'pdf'], false) }}" download data-export-download data-loading-text="Exporting overall PDF report…" class="mt-3 inline-flex items-center rounded-xl bg-white px-5 py-3 text-sm font-semibold text-maroon-800 transition hover:bg-maroon-50">Overall PDF</a>
+        <a href="{{ route('events.results.export-all', [$event, 'format' => 'pdf'], false) }}" download data-export-download data-loading-text="Exporting all event results to PDF…" class="mt-3 inline-flex items-center rounded-xl bg-white px-5 py-3 text-sm font-semibold text-maroon-800 transition hover:bg-maroon-50">All results PDF</a>
+        <a href="{{ route('events.results.export-all', [$event, 'format' => 'xlsx'], false) }}" download data-export-download data-loading-text="Exporting all event results to Excel…" class="mt-3 inline-flex items-center rounded-xl bg-white px-5 py-3 text-sm font-semibold text-maroon-800 transition hover:bg-maroon-50">All results Excel</a>
     </section>
 
     <section class="mt-8" aria-label="Contest reports">

@@ -19,12 +19,22 @@ final class EventResultsDownloadController extends Controller
 
     public function export(Event $event, string $format): Response
     {
-        $report = $this->overallExporter->report($event);
+        return $this->reportDownload($event, $format);
+    }
+
+    public function exportAll(Event $event, string $format): Response
+    {
+        return $this->reportDownload($event, $format, includeContests: true);
+    }
+
+    private function reportDownload(Event $event, string $format, bool $includeContests = false): Response
+    {
+        $report = $this->overallExporter->report($event, $includeContests);
         $content = $format === 'pdf' ? $this->overallExporter->pdf($report) : $this->overallExporter->xlsx($report);
 
         return response($content, 200, [
             'Content-Type' => $format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition' => 'attachment; filename="'.$this->overallExporter->filename($event, $format).'"',
+            'Content-Disposition' => 'attachment; filename="'.$this->overallExporter->filename($event, $format, $includeContests).'"',
             'Cache-Control' => 'private, no-store',
             'X-Content-Type-Options' => 'nosniff',
         ]);

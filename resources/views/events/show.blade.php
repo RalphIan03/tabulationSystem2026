@@ -58,6 +58,9 @@
 
                 <a href="{{ route('events.leaderboard', $event) }}#overall-deductions" class="inline-flex h-11 items-center justify-center rounded-xl border border-white/30 bg-maroon-950/30 px-5 text-sm font-semibold text-white transition hover:bg-white/10">Overall deductions</a>
 
+                <a href="{{ route('events.results.export-all', [$event, 'format' => 'pdf'], false) }}" download data-export-download data-loading-text="Exporting all event results to PDF…" class="inline-flex h-11 items-center justify-center rounded-xl border border-white/30 bg-maroon-950/30 px-5 text-sm font-semibold text-white transition hover:bg-white/10">All results PDF</a>
+                <a href="{{ route('events.results.export-all', [$event, 'format' => 'xlsx'], false) }}" download data-export-download data-loading-text="Exporting all event results to Excel…" class="inline-flex h-11 items-center justify-center rounded-xl border border-white/30 bg-maroon-950/30 px-5 text-sm font-semibold text-white transition hover:bg-white/10">All results Excel</a>
+
                 <a href="{{ route('leaderboards.show', $event) }}" target="_blank" rel="noopener noreferrer" class="inline-flex h-11 items-center justify-center rounded-xl border border-white/30 bg-maroon-950/30 px-5 text-sm font-semibold text-white transition hover:bg-white/10 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/30">
                     Public leaderboard
                 </a>
