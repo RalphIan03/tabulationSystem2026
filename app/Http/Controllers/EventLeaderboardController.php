@@ -37,7 +37,7 @@ final class EventLeaderboardController extends Controller
             }
         }
 
-        $overallStandings = $this->leaderboard->overallStandings($event);
+        $overallStandings = $this->leaderboard->overallStandings($event, rankByPoints: true);
 
         return view('events.leaderboard', [
             'event' => $event,

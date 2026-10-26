@@ -198,7 +198,7 @@ final class LeaderboardCalculator
      *     contests_entered: int
      * }>
      */
-    public function overallStandings(Event $event, bool $applyEventDeductions = true): Collection
+    public function overallStandings(Event $event, bool $applyEventDeductions = true, bool $rankByPoints = false): Collection
     {
         if (! $this->eventRelationsAreLoaded($event)) {
             $event->load([
@@ -263,8 +263,8 @@ final class LeaderboardCalculator
 
                 return $row;
             })
-            ->sort(function (array $left, array $right) use ($event): int {
-                if ($event->leaderboard_frozen) {
+            ->sort(function (array $left, array $right) use ($event, $rankByPoints): int {
+                if ($rankByPoints || $event->leaderboard_frozen) {
                     $pointsComparison = $right['leaderboard_points'] <=> $left['leaderboard_points'];
 
                     if ($pointsComparison !== 0) {

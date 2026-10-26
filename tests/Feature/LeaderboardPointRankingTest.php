@@ -24,7 +24,7 @@ final class LeaderboardPointRankingTest extends TestCase
     use RefreshDatabase;
 
     #[DataProvider('staffLeaderboardStates')]
-    public function test_admins_and_auditors_see_each_teams_net_points_in_overall_standings(AccountRole $role, bool $frozen): void
+    public function test_admins_and_auditors_rank_overall_standings_by_net_points_in_live_and_frozen_states(AccountRole $role, bool $frozen): void
     {
         $user = User::factory()->create(['role' => $role]);
         [$event] = $this->overallEvent();
@@ -39,15 +39,54 @@ final class LeaderboardPointRankingTest extends TestCase
         $this->assertSame(2, $rows->length);
         $names = [];
         $points = [];
+        $ranks = [];
 
         foreach ($rows as $row) {
             $cells = $row->getElementsByTagName('td');
             $names[] = trim($cells->item(1)->textContent);
             $points[] = trim($cells->item($cells->length - 1)->textContent);
+            $ranks[] = trim($cells->item(0)->textContent);
         }
 
-        $this->assertSame($frozen ? ['TEAM B', 'TEAM A'] : ['TEAM A', 'TEAM B'], $names);
-        $this->assertSame($frozen ? ['90.00', '40.00'] : ['40.00', '90.00'], $points);
+        $this->assertSame(['TEAM B', 'TEAM A'], $names);
+        $this->assertSame(['90.00', '40.00'], $points);
+        $this->assertSame(['#1', '#2'], $ranks);
+        $response->assertViewHas('overallStandings', fn ($standings): bool => $standings->first()['participant']->name === 'TEAM B');
+    }
+
+    #[DataProvider('roles')]
+    public function test_staff_rank_combined_linked_and_pending_points_after_overall_deductions(AccountRole $role): void
+    {
+        $user = User::factory()->create(['role' => $role]);
+        [$event, $teamA] = $this->overallEvent();
+        $linked = $event->participants()->create(['name' => 'TEAM A2', 'parent_participant_id' => $teamA->id]);
+        $contest = $event->categories()->firstOrFail()->competitions()->create(['name' => 'Pending race', 'scoring_method' => CompetitionScoringMethod::Ranking]);
+        $contest->rankScores()->create(['rank' => 1, 'points' => 60]);
+        $contest->results()->create(['participant_id' => $linked->id, 'placement' => 1]);
+
+        $this->actingAs($user)->get(route('events.leaderboard', $event))
+            ->assertViewHas('overallStandings', function ($rows): bool {
+                $this->assertSame(['TEAM A', 'TEAM B'], $rows->pluck('participant.name')->all());
+                $this->assertSame([100.0, 90.0], $rows->pluck('leaderboard_points')->all());
+                $this->assertSame(40.0, $rows->first()['finalized_points']);
+                $this->assertSame(60.0, $rows->first()['pending_points']);
+
+                return true;
+            });
+        $this->patch(route('events.overall-deductions.update', $event), ['deductions' => [$teamA->id => 20.25]])
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $page = $this->get(route('events.leaderboard', $event));
+
+        $page->assertViewHas('overallStandings', function ($rows): bool {
+            $this->assertSame(['TEAM B', 'TEAM A'], $rows->pluck('participant.name')->all());
+            $this->assertSame([90.0, 79.75], $rows->pluck('leaderboard_points')->all());
+
+            return true;
+        });
+        $xpath = $this->xpath($page->getContent());
+        $this->assertSame('#1', trim($xpath->query('//table[@id="overall-standings-table"]/tbody/tr[1]/td[1]')->item(0)->textContent));
+        $this->assertSame('TEAM B', trim($xpath->query('//table[@id="overall-standings-table"]/tbody/tr[1]/td[2]')->item(0)->textContent));
+        $this->assertSame('20.25', $teamA->refresh()->overall_deduction);
     }
 
     public function test_frozen_public_leaderboards_rank_by_net_points_instead_of_contest_wins_and_refresh_after_deductions(): void
@@ -76,6 +115,49 @@ final class LeaderboardPointRankingTest extends TestCase
 
         $this->patch(route('events.leaderboard-freeze', $event))->assertRedirect();
         $this->getJson($dataRoute)->assertJsonPath('frozen', false)->assertJsonPath('rows.0.name', 'TEAM A')->assertJsonMissingPath('rows.0.points');
+    }
+
+    public function test_staff_overall_equal_points_use_contest_wins_as_a_tiebreaker(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        [$event, $teamA, $teamB] = $this->overallEvent();
+        $teamB->update(['overall_deduction' => 60]);
+
+        $this->actingAs($admin)->get(route('events.leaderboard', $event))
+            ->assertViewHas('overallStandings', function ($rows): bool {
+                $this->assertSame([40.0, 40.0], $rows->pluck('leaderboard_points')->all());
+                $this->assertSame(['TEAM A', 'TEAM B'], $rows->pluck('participant.name')->all());
+                $this->assertSame([2, 1], $rows->pluck('contest_wins')->all());
+
+                return true;
+            });
+    }
+
+    public function test_staff_overall_zero_points_rank_below_positive_points_after_large_deductions(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        [$event, $teamA] = $this->overallEvent();
+        $teamA->update(['overall_deduction' => 100]);
+
+        $this->actingAs($admin)->get(route('events.leaderboard', $event))
+            ->assertViewHas('overallStandings', function ($rows): bool {
+                $this->assertSame([90.0, 0.0], $rows->pluck('leaderboard_points')->all());
+                $this->assertSame(['TEAM B', 'TEAM A'], $rows->pluck('participant.name')->all());
+
+                return true;
+            });
+    }
+
+    public function test_overall_csv_report_uses_the_same_point_order_as_staff_standings(): void
+    {
+        $admin = User::factory()->create(['role' => AccountRole::Admin]);
+        [$event] = $this->overallEvent();
+
+        $response = $this->actingAs($admin)->get(route('events.results.download', $event))->assertOk();
+
+        $content = $response->streamedContent();
+        $this->assertStringContainsString('1,"TEAM B",1,1,90', $content);
+        $this->assertStringContainsString('2,"TEAM A",2,2,40', $content);
     }
 
     #[DataProvider('roles')]

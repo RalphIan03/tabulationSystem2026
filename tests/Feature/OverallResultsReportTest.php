@@ -252,8 +252,8 @@ final class OverallResultsReportTest extends TestCase
         [$sheet] = $this->workbookXml($response->getContent());
         $rows = $this->sheetRows($sheet);
         $this->assertSame(['Rank', 'Participant', 'Overall deduction', 'Finalized points after deduction'], $rows[8]);
-        $this->assertSame(['1', 'TEAM B', '0', '90'], $rows[9]);
-        $this->assertSame(['2', 'TEAM A', '10', '100'], $rows[10]);
+        $this->assertSame(['1', 'TEAM A', '10', '100'], $rows[9]);
+        $this->assertSame(['2', 'TEAM B', '0', '90'], $rows[10]);
         $artsHeading = array_search(['Category point totals: Arts'], $rows, true);
         $sportsHeading = array_search(['Category point totals: Sports'], $rows, true);
         $this->assertNotFalse($artsHeading);

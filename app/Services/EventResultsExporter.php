@@ -35,7 +35,7 @@ final class EventResultsExporter
         $this->row($stream, ['Overall results']);
         $this->row($stream, ['Rank', 'Participant', 'Contest wins', 'Recorded wins', 'Leaderboard points', 'Contests entered', 'Earned points', 'Overall deduction', 'Finalized points', 'Pending points']);
 
-        foreach ($this->leaderboard->overallStandings($event) as $index => $result) {
+        foreach ($this->leaderboard->overallStandings($event, rankByPoints: true) as $index => $result) {
             $this->row($stream, [
                 $index + 1,
                 $result['participant']->name,

@@ -96,8 +96,8 @@
         <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
             <div>
                 <p class="text-sm font-semibold text-maroon-700">Overall winner</p>
-                <h3 class="mt-1 text-xl font-semibold text-slate-950">{{ $event->leaderboard_frozen ? 'Overall standings by net points' : 'Overall standings by contest wins' }}</h3>
-                <p class="mt-1 text-sm text-slate-500">{{ $event->leaderboard_frozen ? 'Highest points after all contest and overall deductions receive the highest rank.' : 'First-place finishes are summed across contests and shown by category. Recorded match wins and net leaderboard points after overall deductions break ties.' }}</p>
+                <h3 class="mt-1 text-xl font-semibold text-slate-950">Overall standings by net points</h3>
+                <p class="mt-1 text-sm text-slate-500">Highest points after all contest and overall deductions receive the highest rank. Contest wins and recorded match wins break ties in points.</p>
                 <p class="mt-1 text-xs text-amber-700">Pending points are provisional and hidden from the public leaderboard. Current net points include both finalized and pending points.</p>
             </div>
             <div class="flex shrink-0 flex-wrap gap-2">

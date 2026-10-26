@@ -32,7 +32,7 @@ final class OverallResultsExporter
         $finalizedCount = $contests->filter(fn ($contest): bool => $contest->scoresAreFinalized())->count();
         $status = $contests->isEmpty() ? 'No contests configured'
             : ($finalizedCount === $contests->count() ? 'Finalized' : 'Provisional - unfinished contests remain');
-        $standings = $this->leaderboard->overallStandings($event);
+        $standings = $this->leaderboard->overallStandings($event, rankByPoints: true);
         $finalizedEvent = clone $event;
         $finalizedEvent->setRelation('categories', $event->categories->map(static function (Category $category): Category {
             $finalizedCategory = clone $category;
@@ -40,7 +40,7 @@ final class OverallResultsExporter
 
             return $finalizedCategory;
         }));
-        $finalizedStandings = $this->leaderboard->overallStandings($finalizedEvent);
+        $finalizedStandings = $this->leaderboard->overallStandings($finalizedEvent, rankByPoints: true);
         $finalizedIds = $finalizedStandings->pluck('participant.id');
         $headers = ['Rank', 'Participant', 'Overall deduction', 'Finalized points after deduction'];
         $rows = $finalizedStandings->map(static fn (array $row, int $index): array => [
@@ -95,7 +95,7 @@ final class OverallResultsExporter
                 'Event: '.$event->name,
                 'Inclusive dates: '.$event->start_date->format('Y-m-d').' to '.$event->end_date->format('Y-m-d'),
                 'Status: '.$status.' | Finalized contests: '.$finalizedCount.' of '.$contests->count(),
-                'Finalized ranking: '.($event->leaderboard_frozen ? 'Highest net points first (frozen)' : 'Contest wins, recorded wins, then net points'),
+                'Finalized ranking: Highest net points first; contest wins and recorded wins break ties.',
                 'Exported: '.now()->format('Y-m-d H:i:s'),
                 'Summary uses finalized contests only. Category totals show pending points separately; event deductions apply only to the summary.',
             ],
