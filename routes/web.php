@@ -68,6 +68,8 @@ Route::middleware(['auth', 'active', 'credentials-updated', 'visible-event', 'ar
             ->name('events.toggle-status');
         Route::patch('/events/{event}/archive', [EventController::class, 'archive'])
             ->name('events.archive');
+        Route::patch('/events/{event}/restore', [EventController::class, 'restore'])
+            ->name('events.restore');
         Route::delete('/events/{event}', [EventController::class, 'destroy'])
             ->name('events.destroy');
         Route::patch('/events/{event}/leaderboard-freeze', [EventController::class, 'toggleLeaderboardFreeze'])

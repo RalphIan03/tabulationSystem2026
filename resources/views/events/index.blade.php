@@ -8,7 +8,7 @@
         <div>
             <p class="text-sm font-semibold text-maroon-700">{{ $showArchived ? 'Event archive' : 'Event management' }}</p>
             <h2 class="mt-1 text-3xl font-semibold tracking-tight text-slate-950">{{ $showArchived ? 'Archived events' : 'Your events' }}</h2>
-            <p class="mt-2 text-sm text-slate-500">{{ $showArchived ? 'Archived events are read-only. Open one to download its results and contest reports.' : (auth()->user()->isAdmin() ? 'Create an event, then configure its participants, categories, and competitions.' : 'Open an event to manage participants, categories, contests, and scoring.') }}</p>
+            <p class="mt-2 text-sm text-slate-500">{{ $showArchived ? 'Download archived event reports or restore an event to enable editing again.' : (auth()->user()->isAdmin() ? 'Create an event, then configure its participants, categories, and competitions.' : 'Open an event to manage participants, categories, contests, and scoring.') }}</p>
         </div>
 
         @if (auth()->user()->isAdmin() && ! $showArchived)
@@ -101,6 +101,13 @@
                     <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-6 py-3">
                         @if ($event->isArchived())
                         <a href="{{ route('events.results.download', $event, false) }}" data-export-download data-loading-text="Exporting event results…" class="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-semibold text-maroon-700 transition hover:bg-maroon-50">Download results (CSV)</a>
+                        @if (auth()->user()->isAdmin())
+                        <form method="POST" action="{{ route('events.restore', $event, false) }}" data-loading-text="Restoring event…" onsubmit="return confirm('Restore this event? It will become editable again and remain inactive until activated.')">
+                            @csrf
+                            @method('PATCH')
+                            <button type="submit" class="rounded-lg px-2 py-1.5 text-xs font-semibold text-maroon-700 transition hover:bg-maroon-50">Restore event</button>
+                        </form>
+                        @endif
                         @else
                         <a href="{{ route('events.leaderboard', $event) }}" class="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-semibold text-maroon-700 transition hover:bg-maroon-50 hover:text-maroon-900">
                             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19V9m6 10V5m6 14v-7m4 7H2" stroke-linecap="round" stroke-linejoin="round" /></svg>

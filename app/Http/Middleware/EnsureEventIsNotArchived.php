@@ -14,8 +14,9 @@ final class EnsureEventIsNotArchived
     public function handle(Request $request, Closure $next): Response
     {
         $event = $request->route('event');
-        $downloadRoutes = [
+        $allowedRoutes = [
             'events.show',
+            'events.restore',
             'events.results.download',
             'events.results.export',
             'events.results.export-all',
@@ -24,7 +25,7 @@ final class EnsureEventIsNotArchived
 
         if ($event instanceof Event
             && $event->isArchived()
-            && ! in_array($request->route()?->getName(), $downloadRoutes, true)) {
+            && ! in_array($request->route()?->getName(), $allowedRoutes, true)) {
             abort(403, 'Archived events are read-only.');
         }
 

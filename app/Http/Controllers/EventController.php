@@ -169,6 +169,23 @@ final class EventController extends Controller
             ->with('status', 'Event archived. Reports and results remain available for download.');
     }
 
+    public function restore(Event $event): RedirectResponse
+    {
+        if (! $event->isArchived()) {
+            throw ValidationException::withMessages([
+                'restore' => 'Only archived events can be restored.',
+            ]);
+        }
+
+        $event->update([
+            'archived_at' => null,
+            'is_active' => false,
+        ]);
+
+        return to_route('events.show', $event)
+            ->with('status', 'Event restored successfully. It remains inactive until activated.');
+    }
+
     public function updateTieRanking(UpdateEventTieRankingRequest $request, Event $event): RedirectResponse
     {
         $event->update([

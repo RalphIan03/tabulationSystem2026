@@ -18,6 +18,7 @@ final class ActivityLogger
         'login.store' => 'Submitted a sign-in attempt',
         'events.store' => 'Created an event',
         'events.destroy' => 'Deleted an event',
+        'events.restore' => 'Restored an archived event',
         'events.details.update' => 'Updated event name or dates',
         'events.signatories.update' => 'Updated event report signatories',
         'events.toggle-status' => 'Changed event activation status',
